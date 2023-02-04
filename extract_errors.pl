@@ -22,7 +22,7 @@ my $client_code_perl   = Dumper($client_code_hr);
 #----------------------------------------------------------------------
 
 my $errdir = File::Spec->catdir('lib', 'MongoDB', 'XS', 'Error');
-
+print `ls -laR`;
 CORE::mkdir $errdir or do {
     die "mkdir($errdir): $!" if !$!{'EEXIST'};
 };
