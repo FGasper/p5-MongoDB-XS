@@ -1,0 +1,38 @@
+on:
+  push:
+    branches:
+      - '*'
+    tags-ignore:
+      - '*'
+  pull_request:
+
+env:
+   PERL_USE_UNSAFE_INC: 0
+   AUTHOR_TESTING: 1
+   AUTOMATED_TESTING: 1
+   RELEASE_TESTING: 1
+   PERL_CARTON_PATH: $GITHUB_WORKSPACE/local
+
+jobs:
+
+  linux-apt:
+    runs-on: ubuntu-latest
+
+    container:
+      image: perldocker/perl-tester
+
+    steps:
+      - run: apt install -y libmongoc-dev
+      - uses: actions/checkout@main
+        with:
+            submodules: recursive
+      - name: perl -V
+        run: perl -V
+      - name: Install Dependencies
+        run: cpanm --notest --installdeps --with-configure --with-develop --with-recommends --verbose .
+      - name: perl Makefile.PL
+        run: perl Makefile.PL
+      - name: make
+        run: make
+      - name: Run Tests
+        run: prove -wlvmb t
