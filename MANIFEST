@@ -19,5 +19,6 @@ easyxs/ppport.h
 extract_errors.pl
 lib/MongoDB/XS.pm
 lib/MongoDB/XS/Error.pm
+lib/MongoDB/XS/ErrorCodes.pm
 t/basic.t
 t/version.t

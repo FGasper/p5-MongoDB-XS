@@ -1,5 +1,6 @@
 use strict;
 use warnings;
+use autodie;
 
 use Config;
 
@@ -21,6 +22,34 @@ my $cflags = ExtUtils::PkgConfig->cflags($PC_MODULE) || q<>;
 print "Fetching error strings from your MongoC …\n";
 system $^X, 'extract_errors.pl' and exit 1;
 print "Got error strings. Proceeding …\n";
+
+# The following should compile & link:
+my $check_c = <<END;
+#include <mongoc/mongoc.h>
+
+int main() {
+    void* foo = mongoc_client_pool_new_with_error;
+    return 0;
+}
+END
+
+{
+    print "Checking that your mongoc is recent enough …$/";
+
+    my $dir = File::Temp::tempdir( CLEANUP => 1 );
+
+    my $source_path = File::Spec->catfile($dir, 'test.c');
+    my $target_path = File::Spec->catfile($dir, 'test');
+
+    {
+        open my $cfh, '>', $source_path;
+        syswrite $cfh, $check_c;
+    }
+
+    system( "$Config{'cc'} $cflags $source_path -o $target_path $libs" ) and do {
+        die "Failed to build test binary: Is your mongoc recent enough?\n";
+    };
+}
 
 #----------------------------------------------------------------------
 
