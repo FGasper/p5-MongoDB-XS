@@ -45,10 +45,12 @@ jobs:
       - uses: actions/checkout@main
         with:
             submodules: recursive
+      - run: ls -la
       - name: Download & extract libmongoc
         run: curl -L https://github.com/mongodb/mongo-c-driver/releases/download/1.23.2/mongo-c-driver-1.23.2.tar.gz | tar -xzf -
       - name: Build & install libmongoc
         run: cd mongo-c-driver-1.23.2 && cmake . && make install && cd ..
+      - run: ls -la
       - name: perl -V
         run: perl -V
       - name: Install Dependencies
