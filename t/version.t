@@ -7,7 +7,7 @@ use Test::More;
 
 use MongoDB::XS;
 
-ok( MongoDB::XS::version_string(), 'version_string()' );
+ok( MongoDB::XS::mongoc_version_string(), 'version_string()' );
 
 done_testing;
 

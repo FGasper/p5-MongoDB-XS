@@ -9,3 +9,7 @@ on configure => sub {
     requires 'ExtUtils::MakeMaker::CPANfile';
     requires 'File::Which';
 };
+
+on test => sub {
+    requires 'Test::Fatal';
+};
