@@ -15,17 +15,31 @@ env:
 
 jobs:
 
-  linux-apt:
+  linux:
     runs-on: ubuntu-latest
 
     container:
       image: perldocker/perl-tester
 
     steps:
-      - run: apt install -y libmongoc-dev
+      - run: apt install -y cmake
       - uses: actions/checkout@main
         with:
             submodules: recursive
+      - name: Download & extract libmongoc
+        run: curl -L https://github.com/mongodb/mongo-c-driver/releases/download/1.23.2/mongo-c-driver-1.23.2.tar.gz | tar -xvzf -
+      - name: Build & install libmongoc
+        run: cd mongo-c-driver-1.23.2 && cmake . && make install
+      - name: perl -V
+        run: perl -V
+      - name: Install Dependencies
+        run: cpanm --notest --installdeps --with-configure --with-develop --with-recommends --verbose .
+      - name: perl Makefile.PL
+        run: perl Makefile.PL
+      - name: make
+        run: make
+      - name: Run Tests
+        run: prove -wlvmb t
       - name: perl -V
         run: perl -V
       - name: Install Dependencies
@@ -37,6 +51,26 @@ jobs:
       - name: Run Tests
         run: prove -wlvmb t
 
+  linux-old-version:
+    runs-on: ubuntu-latest
+
+    container:
+      image: perldocker/perl-tester
+
+    steps:
+      - run: apt install -y cmake
+      - uses: actions/checkout@main
+        with:
+            submodules: recursive
+      - name: Download & extract libmongoc
+        run: curl -L https://github.com/mongodb/mongo-c-driver/releases/download/1.23.2/mongo-c-driver-1.20.0.tar.gz | tar -xvzf -
+      - name: Build & install libmongoc
+        run: cd mongo-c-driver-1.20.0 && cmake . && make install
+      - name: Install Dependencies
+        run: cpanm --notest --installdeps --with-configure --with-develop --with-recommends --verbose .
+      - name: perl Makefile.PL FAILS
+        run: ! perl Makefile.PL
+
   mac-dynamic:
     runs-on: macOS-latest
 
@@ -44,7 +78,7 @@ jobs:
       - uses: actions/checkout@main
         with:
             submodules: recursive
-      - name: Set up Perl & libnfs
+      - name: Set up Perl & libmongoc
         run: brew install libmongoc cpanminus
       - name: perl -V
         run: perl -V
