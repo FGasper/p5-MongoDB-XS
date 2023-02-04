@@ -46,7 +46,7 @@ jobs:
         with:
             submodules: recursive
       - name: Download & extract libmongoc
-        run: curl -L https://github.com/mongodb/mongo-c-driver/releases/download/1.23.2/mongo-c-driver-1.23.2.tar.gz | tar -xvzf -
+        run: curl -L https://github.com/mongodb/mongo-c-driver/releases/download/1.23.2/mongo-c-driver-1.23.2.tar.gz | tar -xzf -
       - name: Build & install libmongoc
         run: cd mongo-c-driver-1.23.2 && cmake . && make install
       - name: perl -V
@@ -82,7 +82,7 @@ jobs:
         with:
             submodules: recursive
       - name: Download & extract libmongoc
-        run: curl -L https://github.com/mongodb/mongo-c-driver/releases/download/1.20.0/mongo-c-driver-1.20.0.tar.gz | tar -xvzf -
+        run: curl -L https://github.com/mongodb/mongo-c-driver/releases/download/1.20.0/mongo-c-driver-1.20.0.tar.gz | tar -xzf -
       - name: Build & install libmongoc
         run: cd mongo-c-driver-1.20.0 && cmake . && make install
       - name: Install Dependencies
