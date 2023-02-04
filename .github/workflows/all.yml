@@ -18,8 +18,27 @@ jobs:
   linux:
     runs-on: ubuntu-latest
 
+    strategy:
+      fail-fast: false
+      matrix:
+        perl-version:
+          - '5.36'
+          - '5.34'
+          - '5.32'
+          - '5.30'
+          - '5.28'
+          - '5.26'
+          - '5.24'
+          - '5.22'
+          - '5.20'
+          - '5.18'
+          - '5.16'
+          - '5.14'
+          - '5.12'
+          - '5.10'
+
     container:
-      image: perldocker/perl-tester
+      image: perldocker/perl-tester:${{ matrix.perl-version }}
 
     steps:
       - run: apt install -y cmake
@@ -63,7 +82,7 @@ jobs:
         with:
             submodules: recursive
       - name: Download & extract libmongoc
-        run: curl -L https://github.com/mongodb/mongo-c-driver/releases/download/1.23.2/mongo-c-driver-1.20.0.tar.gz | tar -xvzf -
+        run: curl -L https://github.com/mongodb/mongo-c-driver/releases/download/1.20.0/mongo-c-driver-1.20.0.tar.gz | tar -xvzf -
       - name: Build & install libmongoc
         run: cd mongo-c-driver-1.20.0 && cmake . && make install
       - name: Install Dependencies

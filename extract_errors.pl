@@ -98,17 +98,24 @@ sub _find_mongoc_err_header_or_die {
 
     my $header_dir;
 
-    File::Find::find(
-        sub {
-            if ($_ eq $filename) {
-                die "Found again?? $File::Find::name\n" if $header_dir;
+    eval {
+        File::Find::find(
+            sub {
+                if ($_ eq $filename) {
+                    die "Found again?? $File::Find::name\n" if $header_dir;
 
-                print "Found it: $File::Find::name\n";
-                $header_dir = $File::Find::dir;
-            }
-        },
-        @i,
-    );
+                    print "Found it: $File::Find::name\n";
+                    $header_dir = $File::Find::dir;
+
+                    # File::Find leaves us no other way to stop iterating:
+                    die 'zzzzzzzzzzzzz';
+                }
+            },
+            @i,
+        );
+    };
+
+    die if $@ !~ m<zzzzzzz>;
 
     if (!$header_dir) {
         die "Couldn’t find $filename!\n";
