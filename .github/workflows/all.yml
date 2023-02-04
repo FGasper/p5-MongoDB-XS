@@ -69,7 +69,7 @@ jobs:
       - name: Install Dependencies
         run: cpanm --notest --installdeps --with-configure --with-develop --with-recommends --verbose .
       - name: perl Makefile.PL FAILS
-        run: ! perl Makefile.PL
+        run: '! perl Makefile.PL'
 
   mac-dynamic:
     runs-on: macOS-latest
