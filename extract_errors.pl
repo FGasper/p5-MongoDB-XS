@@ -5,6 +5,7 @@ use warnings;
 use autodie;
 
 use File::Find;
+use File::Path;
 use File::Spec;
 use Data::Dumper;
 
@@ -21,11 +22,9 @@ my $client_code_perl   = Dumper($client_code_hr);
 
 #----------------------------------------------------------------------
 
-my $errdir = File::Spec->catdir('lib', 'MongoDB', 'XS', 'Error');
-
-CORE::mkdir $errdir or do {
-    die "mkdir($errdir): $!" if !$!{'EEXIST'};
-};
+File::Path::make_path(
+    File::Spec->catdir('lib', 'MongoDB', 'XS', 'Error'),
+);
 
 open my $hfh, '>', File::Spec->catfile('lib', 'MongoDB', 'XS', 'Error', 'ClientCodes.pm');
 
