@@ -36,3 +36,22 @@ jobs:
         run: make
       - name: Run Tests
         run: prove -wlvmb t
+
+  mac-dynamic:
+    runs-on: macOS-latest
+
+    steps:
+      - uses: actions/checkout@main
+        with:
+            submodules: recursive
+      - name: Set up Perl & libnfs
+        run: brew install libmongoc cpanminus
+      - name: perl -V
+        run: perl -V
+      - name: Install Dependencies
+        run: cpanm --notest --installdeps --with-develop --with-configure --with-recommends --verbose .
+      - name: perl Makefile.PL
+        run: perl Makefile.PL
+      - name: make
+        run: make
+      - run: prove -wlvmb t
