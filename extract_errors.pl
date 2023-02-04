@@ -21,6 +21,10 @@ my $client_code_perl   = Dumper($client_code_hr);
 
 #----------------------------------------------------------------------
 
+mkdir File::Spec->catdir('lib', 'MongoDB', 'XS', 'Error') or do {
+    die "mkdir: $!" if !$!{'EEXIST'};
+};
+
 open my $hfh, '>', File::Spec->catfile('lib', 'MongoDB', 'XS', 'Error', 'ClientCodes.pm');
 
 print {$hfh} <<"END";
