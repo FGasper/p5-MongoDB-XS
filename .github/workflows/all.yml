@@ -52,7 +52,7 @@ jobs:
       - name: Build & install libmongoc
         run: cd mongo-c-driver-1.23.2 && cmake . && make install && cd ..
       - run: pwd
-      - run: ls -la
+      - run: ls -laR
       - name: perl -V
         run: perl -V
       - name: Install Dependencies
