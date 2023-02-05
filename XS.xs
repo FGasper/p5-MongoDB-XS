@@ -434,6 +434,7 @@ DESTROY(SV* self_sv)
         Safefree(mdxs->threads);
         Safefree(mdxs->uri_str);
 
+        pthread_cond_destroy(&mdxs->worker_input.tasks_pending);
         pthread_mutex_destroy(&mdxs->worker_input.mutex);  // TODO: check
 
 void
