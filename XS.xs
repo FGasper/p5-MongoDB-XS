@@ -363,6 +363,8 @@ static bson_t* str2bson_or_croak(pTHX_ const char* bson, size_t len) {
 
 MODULE = MongoDB::XS            PACKAGE = MongoDB::XS
 
+PROTOTYPES: DISABLE
+
 SV*
 new(const char* classname, SV* uri_sv)
     CODE:
