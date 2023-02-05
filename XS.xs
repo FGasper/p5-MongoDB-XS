@@ -381,6 +381,7 @@ new(const char* classname, SV* uri_sv)
         // This, unfortunately, blocks. Ideally it’d move to the worker.
         mongoc_client_pool_t *pool = mongoc_client_pool_new_with_error(uri, &error);
         if (!pool) {
+            mongoc_uri_destroy(uri);
             Safefree(uri_str);
             croak_sv(_error2sv(aTHX_ &error));
         }
@@ -411,6 +412,29 @@ new(const char* classname, SV* uri_sv)
 
     OUTPUT:
         RETVAL
+
+void
+DESTROY(SV* self_sv)
+    CODE:
+        mdxs_t* mdxs = exs_structref_ptr(self_sv);
+
+        if (PL_dirty && (getpid() == mdxs->pid)) {
+            warn("%" SVf ": DESTROY during global destruction; memory leak likely!", self_sv);
+        }
+
+        mongoc_client_pool_destroy(mdxs->pool);
+        mongoc_uri_destroy(mdxs->uri);
+
+        courier_destroy(mdxs->worker_input.courier);
+
+        for (unsigned t=0; t<mdxs->num_threads; t++) {
+            pthread_cancel(mdxs->threads[t]);    // TODO: check
+        }
+
+        Safefree(mdxs->threads);
+        Safefree(mdxs->uri_str);
+
+        pthread_mutex_destroy(&mdxs->worker_input.mutex);  // TODO: check
 
 void
 process (SV* self_sv)
@@ -492,29 +516,6 @@ fd(SV* self_sv)
         RETVAL = courier_read_fd(mdxs->worker_input.courier);
     OUTPUT:
         RETVAL
-
-void
-DESTROY(SV* self_sv)
-    CODE:
-        mdxs_t* mdxs = exs_structref_ptr(self_sv);
-
-        if (PL_dirty && (getpid() == mdxs->pid)) {
-            warn("%" SVf ": DESTROY during global destruction; memory leak likely!", self_sv);
-        }
-
-        mongoc_client_pool_destroy(mdxs->pool);
-        mongoc_uri_destroy(mdxs->uri);
-
-        courier_destroy(mdxs->worker_input.courier);
-
-        for (unsigned t=0; t<mdxs->num_threads; t++) {
-            pthread_cancel(mdxs->threads[t]);    // TODO: check
-        }
-
-        Safefree(mdxs->threads);
-        Safefree(mdxs->uri_str);
-
-        pthread_mutex_destroy(&mdxs->worker_input.mutex);  // TODO: check
 
 char*
 mongoc_version_string()
