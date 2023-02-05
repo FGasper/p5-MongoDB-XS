@@ -8,6 +8,8 @@ use ExtUtils::MakeMaker::CPANfile;
 use ExtUtils::PkgConfig;
 use File::Temp;
 
+my $ASAN = 0;
+
 my $PC_MODULE = 'libmongoc-1.0';
 
 my $version = ExtUtils::PkgConfig->modversion($PC_MODULE);
@@ -18,6 +20,13 @@ if (!$version) {
 
 my $libs = ExtUtils::PkgConfig->libs($PC_MODULE);
 my $cflags = ExtUtils::PkgConfig->cflags($PC_MODULE) || q<>;
+
+my $lddlflags = $Config{'lddlflags'};
+
+if ($ASAN) {
+    $cflags .= " -fsanitize=address";
+    $lddlflags .= " -fsanitize=address";
+}
 
 print "Fetching error strings from your MongoC …\n";
 system $^X, 'extract_errors.pl' and exit 1;
@@ -34,7 +43,7 @@ int main() {
 END
 
 {
-    print "Checking that your mongoc is recent enough …$/";
+    print "Verifying that your mongoc is recent enough …$/";
 
     my $dir = File::Temp::tempdir( CLEANUP => 1 );
 
@@ -76,6 +85,8 @@ WriteMakefile(
     ],
 
     LIBS => $libs,
+
+    LDDLFLAGS => $lddlflags,
 
     PMLIBDIRS => ['lib'],
 

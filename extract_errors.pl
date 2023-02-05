@@ -8,6 +8,7 @@ use File::Find;
 use File::Path;
 use File::Spec;
 use Data::Dumper;
+use Cwd;
 
 use ExtUtils::PkgConfig;
 
@@ -22,9 +23,10 @@ my $client_code_perl   = Dumper($client_code_hr);
 
 #----------------------------------------------------------------------
 
-File::Path::make_path(
-    File::Spec->catdir('lib', 'MongoDB', 'XS', 'Error'),
-);
+my $errdir = File::Spec->catdir('lib', 'MongoDB', 'XS', 'Error');
+CORE::mkdir($errdir) or do {
+    die "mkdir($errdir): $!" if !$!{'EEXIST'};
+};
 
 open my $hfh, '>', File::Spec->catfile('lib', 'MongoDB', 'XS', 'Error', 'ClientCodes.pm');
 
@@ -99,6 +101,8 @@ sub _find_mongoc_err_header_or_die {
 
     my $header_dir;
 
+    my $cwd = Cwd::cwd();
+
     eval {
         File::Find::find(
             sub {
@@ -115,6 +119,8 @@ sub _find_mongoc_err_header_or_die {
             @i,
         );
     };
+
+    chdir $cwd or warn "chdir($cwd): $!";
 
     die if $@ !~ m<zzzzzzz>;
 
