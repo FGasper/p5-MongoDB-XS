@@ -15,7 +15,10 @@ env:
 
 jobs:
   linux-integration:
-    runs-on: ubuntu:jammy
+    runs-on: ubuntu-latest
+
+    container:
+      image: ubuntu:jammy
 
     steps:
       - run: apt update
