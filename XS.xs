@@ -8,6 +8,7 @@
 #include <bson/bson.h>
 
 #include "courier.h"
+#include "worker.h"
 
 #define PERL_NS "MongoDB::XS"
 
@@ -18,41 +19,6 @@
 // can just create multiple MongoDB::XS instances.
 //
 #define THREADS_PER_MDXS 1
-
-typedef enum {
-    TASK_CREATED,
-    TASK_STARTED,
-    TASK_SUCCEEDED,
-    TASK_FAILED,
-} task_state_t;
-
-typedef enum {
-    TASK_TYPE_COMMAND = 1,
-    TASK_TYPE_SHUTDOWN,
-} mdb_task_type_t;
-
-#define TASK_FINISHED(x) (x > TASK_STARTED)
-
-typedef struct {
-    const char*                 db_name;
-    void*                *request_payload;
-    //const mongoc_read_prefs_t*  read_prefs;
-    bson_t                reply;
-    bson_error_t          error;
-    task_state_t      state;
-    mdb_task_type_t  type;
-    void*           opaque;
-} mdb_task_t;
-
-typedef struct {
-    pthread_mutex_t         mutex;
-    pthread_cond_t          tasks_pending;
-    mongoc_client_pool_t*   pool;
-    mdb_task_t**            tasks;
-    unsigned                num_tasks;
-
-    courier_t*                courier;
-} worker_in_t;
 
 typedef struct {
     pid_t                   pid;
@@ -72,58 +38,6 @@ typedef struct {
 } mdxs_bson_realloc_ctx_t;
 
 static bool did_init = false;
-
-// ----------------------------------------------------------------------
-
-static void _lock_worker(worker_in_t *worker_input) {
-    if (-1 == pthread_mutex_lock(&worker_input->mutex)) {
-        assert(0); // TODO: Should be in a separate object file.
-    }
-}
-
-static void _unlock_worker(worker_in_t *worker_input) {
-    if (-1 == pthread_mutex_unlock(&worker_input->mutex)) {
-        assert(0); // TODO: Should be in a separate object file.
-    }
-}
-
-// ----------------------------------------------------------------------
-// Task handlers
-// ----------------------------------------------------------------------
-
-static void _handle_command( worker_in_t *input, mdb_task_t* task ) {
-    mongoc_client_t* client = mongoc_client_pool_pop(input->pool);
-
-    bool ok = mongoc_client_command_simple(
-        client,
-        task->db_name,
-        (bson_t*) task->request_payload,
-        NULL, //task->read_prefs,
-        &task->reply,
-        &task->error
-    );
-
-    task->state = ok ? TASK_SUCCEEDED : TASK_FAILED;
-
-    mongoc_client_pool_push(input->pool, client);
-
-    _lock_worker(input);
-    courier_set(input->courier);
-    _unlock_worker(input);
-}
-
-typedef void (*mdxs_handler_t) (worker_in_t*, mdb_task_t*);
-
-static mdxs_handler_t mdxs_handlers[] = {
-    [TASK_TYPE_COMMAND] = _handle_command,
-    [TASK_TYPE_SHUTDOWN] = NULL,
-};
-
-static void execute_task( worker_in_t *input, mdb_task_t* task ) {
-    mdxs_handler_t handler = mdxs_handlers[task->type];
-    assert(handler);
-    handler(input, task);
-}
 
 // ----------------------------------------------------------------------
 
@@ -188,169 +102,6 @@ static SV* _error2sv (pTHX_ bson_error_t *error) {
     );
 }
 
-void _initialize_worker_input( worker_in_t *worker_input, mongoc_client_pool_t* pool ) {
-    worker_input->courier = courier_create();
-
-    pthread_mutex_init(&worker_input->mutex, NULL);  // TODO: check
-    pthread_cond_init(&worker_input->tasks_pending, NULL);  // TODO: check
-
-    worker_input->pool = pool;
-}
-
-static void _destroy_tasks(mdb_task_t** tasks, unsigned count) {
-    // TODO
-    for (unsigned t=0; t<count; t++) {
-        Safefree(tasks[t]->db_name);
-    }
-}
-
-static mdb_task_t** _get_finished_tasks( worker_in_t* worker_input, unsigned *finished_count ) {
-    _lock_worker(worker_input);
-
-    mdb_task_t** retval = NULL;
-
-    if (courier_read_pending(worker_input->courier)) {
-
-// fprintf(stderr, "read is pending\n");
-        mdb_task_t* finished[worker_input->num_tasks];
-        *finished_count = 0;
-
-// fprintf(stderr, "tasks count: %u\n", worker_input->num_tasks);
-        for (unsigned i=0; i<worker_input->num_tasks; i++) {
-// fprintf(stderr, "task[%u] state: %d\n", i, worker_input->tasks[i]->state);
-            if (!TASK_FINISHED(worker_input->tasks[i]->state)) continue;
-
-            finished[*finished_count] = worker_input->tasks[i];
-            (*finished_count)++;
-        }
-// fprintf(stderr, "finished count: %u\n", *finished_count);
-
-        if (*finished_count) {
-            retval = calloc(*finished_count, sizeof(mdb_task_t*));
-            memcpy(retval, finished, *finished_count * sizeof(mdb_task_t*));
-
-            unsigned new_queue_size =  worker_input->num_tasks - *finished_count;
-            mdb_task_t** new_queue = calloc(new_queue_size, sizeof(mdb_task_t*));
-            mdb_task_t** nqp = new_queue;
-
-            for (unsigned i=0; i<worker_input->num_tasks; i++) {
-                if (TASK_FINISHED(worker_input->tasks[i]->state)) continue;
-
-                *nqp = worker_input->tasks[i];
-                nqp++;
-            }
-
-            free(worker_input->tasks);
-            worker_input->tasks = new_queue;
-            worker_input->num_tasks = new_queue_size;
-
-            courier_read(worker_input->courier);
-        }
-        else {
-            fprintf(stderr, "huh?? read pending but no finished tasks?\n");
-        }
-    }
-
-// for (unsigned i=0; i<worker_input->num_tasks; i++) {
-// fprintf(stderr, "tasks after get-finished: task[%u]=%p\n", i, worker_input->tasks[i]);
-// }
-
-    _unlock_worker(worker_input);
-
-    return retval;
-}
-
-static void _push_task( worker_in_t* worker_input, mdb_task_t* new_task ) {
-    _lock_worker(worker_input);
-
-    mdb_task_t** new_queue = calloc(
-        1 + worker_input->num_tasks,
-        sizeof(mdb_task_t*)
-    );
-    new_queue[worker_input->num_tasks] = new_task;
-
-    if (worker_input->num_tasks) {
-// for (unsigned i=0; i<worker_input->num_tasks; i++) {
-// fprintf(stderr, "before memcpy: task[%u]=%p\n", i, worker_input->tasks[i]);
-// }
-        memcpy(
-            new_queue,
-            worker_input->tasks,
-            worker_input->num_tasks * sizeof(mdb_task_t*)
-        );
-
-        free(worker_input->tasks);
-    }
-
-    worker_input->tasks = new_queue;
-    worker_input->num_tasks++;
-
-// for (unsigned i=0; i<worker_input->num_tasks; i++) {
-// fprintf(stderr, "tasks after push: task[%u]=%p\n", i, worker_input->tasks[i]);
-// }
-
-    _unlock_worker(worker_input);
-
-    pthread_cond_signal(&worker_input->tasks_pending);
-// fprintf(stderr, "pushing task - signaled\n");
-}
-
-static mdb_task_t* _start_next_task(worker_in_t *worker_input) {
-    _lock_worker(worker_input);
-    // fprintf(stderr, "%p locked\n", pthread_self());
-
-    mdb_task_t* retval = NULL;
-
-    while (!retval) {
-// fprintf(stderr, "tasks count: %u\n", worker_input->num_tasks);
-        for (unsigned t=0; t<worker_input->num_tasks; t++) {
-// printf("%p, task[%u]: %p\n", pthread_self(), t, worker_input->tasks[t]);
-            if (worker_input->tasks[t]->state == TASK_CREATED) {
-                retval = worker_input->tasks[t];
-                retval->state = TASK_STARTED;
-                break;
-            }
-        }
-
-        if (!retval) {
-            // fprintf(stderr, "%p awaiting pending task; giving up lock\n", pthread_self());
-            if (-1 == pthread_cond_wait(&worker_input->tasks_pending, &worker_input->mutex)) {
-                assert(0);
-            }
-            // fprintf(stderr, "thread %p: tasks pending!!\n", pthread_self());
-        }
-    }
-
-    _unlock_worker(worker_input);
-    // fprintf(stderr, "%p unlocked\n", pthread_self());
-
-    return retval;
-}
-
-static void* worker (void* data) {
-    //fprintf(stderr, "in thread %ld\n", (intptr_t) pthread_self());
-    worker_in_t *input = data;
-
-    mdb_task_t* task;
-
-    bool sent_shutdown = false;
-
-    while (!sent_shutdown) {
-        task = _start_next_task(input);
-
-        switch (task->type) {
-            case TASK_TYPE_SHUTDOWN:
-                sent_shutdown = true;
-                break;
-
-            default:
-                execute_task(input, task);
-        }
-    }
-
-    return NULL;
-}
-
 static bson_t* str2bson_or_croak(pTHX_ const char* bson, size_t len) {
     bson_t* parsed = bson_new_from_data(
         (const uint8_t*) bson, len
@@ -359,6 +110,13 @@ static bson_t* str2bson_or_croak(pTHX_ const char* bson, size_t len) {
     if (!parsed) croak("Invalid BSON given!");
 
     return parsed;
+}
+
+static void _destroy_tasks(mdb_task_t** tasks, unsigned count) {
+    // TODO
+    for (unsigned t=0; t<count; t++) {
+        Safefree(tasks[t]->db_name);
+    }
 }
 
 // ----------------------------------------------------------------------
@@ -406,10 +164,12 @@ new(const char* classname, SV* uri_sv)
 
         Newx(mdxs->threads, mdxs->num_threads, pthread_t);
 
-        _initialize_worker_input( &mdxs->worker_input, pool );
+        initialize_worker_input( &mdxs->worker_input );
+
+        mdxs->worker_input.pool = pool;
 
         for (unsigned t=0; t<mdxs->num_threads; t++) {
-            pthread_create(&mdxs->threads[t], NULL, worker, &mdxs->worker_input);
+            pthread_create(&mdxs->threads[t], NULL, worker_body, &mdxs->worker_input);
         }
 
     OUTPUT:
@@ -430,7 +190,7 @@ DESTROY(SV* self_sv)
                 .type = TASK_TYPE_SHUTDOWN,
             };
 
-            _push_task(&mdxs->worker_input, task);
+            push_task(&mdxs->worker_input, task);
         }
 
         for (unsigned t=0; t<mdxs->num_threads; t++) {
@@ -441,20 +201,17 @@ DESTROY(SV* self_sv)
         mongoc_client_pool_destroy(mdxs->pool);
         mongoc_uri_destroy(mdxs->uri);
 
-        courier_destroy(mdxs->worker_input.courier);
+        destroy_worker_input( &mdxs->worker_input );
 
         Safefree(mdxs->threads);
         Safefree(mdxs->uri_str);
-
-        pthread_cond_destroy(&mdxs->worker_input.tasks_pending);
-        pthread_mutex_destroy(&mdxs->worker_input.mutex);  // TODO: check
 
 void
 process (SV* self_sv)
     CODE:
         mdxs_t* mdxs = exs_structref_ptr(self_sv);
         unsigned count = 0;
-        mdb_task_t **tasks = _get_finished_tasks(&mdxs->worker_input, &count);
+        mdb_task_t **tasks = get_finished_tasks(&mdxs->worker_input, &count);
         // printf("received response(s): %u\n", count);
         for (unsigned c=0; c<count; c++) {
             SV* reply_sv;
@@ -520,7 +277,7 @@ run_command(SV* self_sv, SV* dbname_sv, SV* bson_sv, SV* cb)
         };
         //fprintf(stderr, "new task = %p\n", task);
 
-        _push_task(&mdxs->worker_input, task);
+        push_task(&mdxs->worker_input, task);
 
 int
 fd(SV* self_sv)

@@ -82,6 +82,7 @@ WriteMakefile(
     OBJECT => [
         '$(BASEEXT)$(OBJ_EXT)',
         'courier.o',
+        'worker.o',
     ],
 
     LIBS => $libs,

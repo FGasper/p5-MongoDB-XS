@@ -1,3 +1,6 @@
+#ifndef MDXS_COURIER_H
+#define MDXS_COURIER_H
+
 #include <stdbool.h>
 #include <unistd.h>
 
@@ -13,3 +16,5 @@ void courier_read (courier_t*);
 
 int courier_read_fd (courier_t*);
 bool courier_read_pending (courier_t*);
+
+#endif
