@@ -22,3 +22,5 @@ lib/MongoDB/XS/Error.pm
 lib/MongoDB/XS/ErrorCodes.pm
 t/basic.t
 t/version.t
+worker.c
+worker.h
