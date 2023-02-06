@@ -14,6 +14,19 @@ env:
    PERL_CARTON_PATH: $GITHUB_WORKSPACE/local
 
 jobs:
+  linux-integration:
+    runs-on: ubuntu:jammy
+
+    steps:
+      - run: apt update
+      - run: apt install -y gnupg cmake
+      - run: curl -fsSL https://www.mongodb.org/static/pgp/server-6.0.asc | apt-key add -
+      - run: echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org.list
+      - run: apt update
+      - run: apt install -y mongodb-org
+      - uses: actions/checkout@main
+        with:
+            submodules: recursive
 
   linux:
     runs-on: ubuntu-latest

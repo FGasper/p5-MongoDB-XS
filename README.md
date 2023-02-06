@@ -12,11 +12,11 @@ MongoDB::XS - [MongoDB](https://mongodb.com) in Perl via C/XS.
 
     my $mdb = MongoDB::XS->new("mongodb://127.0.0.1");
 
-    my $condvar = AE::cv();
+    my $cv = AE::cv();
 
     my $w = AE::io( $mdb->fd(), 0, sub {
         $mdb->process();
-        $condvar->send();
+        $cv->send();
     } );
 
     my $request_json = JSON::PP::encode_json({ hello: 1 });
@@ -40,13 +40,15 @@ MongoDB::XS - [MongoDB](https://mongodb.com) in Perl via C/XS.
 
 # DESCRIPTION
 
-This library is a research effort to provide MongoDB support in Perl
-via MongoDB’s [official C driver](https://mongoc.org) rather than their
-[now-discontinued Perl driver](https://metacpan.org/pod/MongoDB).
+This library provides MongoDB support in Perl
+via an XS binding to MongoDB’s official C driver,
+[MongoC](https://mongoc.org).
+
+This is a research project, **NOT** an official MongoDB driver.
 
 # DESIGN
 
-This module intends, as much as possible, to avoid blocking Perl.
+This module avoids blocking Perl.
 Toward that end, each instance runs “behind” Perl in a separate POSIX
 thread; a pollable file descriptor facilitates event loop integration.
 
@@ -88,6 +90,11 @@ It also lacks fine-tuning controls like read & write concern.
 
 This library never calls
 [mongoc\_cleanup()](http://mongoc.org/libmongoc/current/mongoc_cleanup.html).
+
+# SEE ALSO
+
+MongoDB’s [now-discontinued official Perl driver](https://metacpan.org/pod/MongoDB) is the
+obvious point of reference.
 
 # METHODS
 

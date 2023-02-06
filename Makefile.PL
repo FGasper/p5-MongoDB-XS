@@ -28,6 +28,11 @@ if ($ASAN) {
     $lddlflags .= " -fsanitize=address";
 }
 
+# Prevent spurious exports:
+if ($^O !~ /^(MSWin32|darwin|solaris|aix)$/i && ($Config{ld} =~ /gcc|g\+\+/ || $Config{gccversion})) {
+    $lddlflags .= " -Wl,--exclude-libs,ALL";
+}
+
 print "Fetching error strings from your MongoC …\n";
 system $^X, 'extract_errors.pl' and exit 1;
 print "Got error strings. Proceeding …\n";

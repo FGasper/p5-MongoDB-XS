@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <stdbool.h>
 
 #include "worker.h"
 
@@ -72,9 +73,9 @@ static void _handle_command( worker_in_t *input, mdb_task_t* task ) {
         &task->error
     );
 
-    task->state = ok ? TASK_SUCCEEDED : TASK_FAILED;
-
     mongoc_client_pool_push(input->pool, client);
+
+    task->state = ok ? TASK_SUCCEEDED : TASK_FAILED;
 
     worker_lock(input);
     courier_set(input->courier);
