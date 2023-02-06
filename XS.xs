@@ -422,14 +422,14 @@ DESTROY(SV* self_sv)
             warn("%" SVf ": DESTROY during global destruction; memory leak likely!", self_sv);
         }
 
+        for (unsigned t=0; t<mdxs->num_threads; t++) {
+            pthread_cancel(mdxs->threads[t]);    // TODO: check
+        }
+
         mongoc_client_pool_destroy(mdxs->pool);
         mongoc_uri_destroy(mdxs->uri);
 
         courier_destroy(mdxs->worker_input.courier);
-
-        for (unsigned t=0; t<mdxs->num_threads; t++) {
-            pthread_cancel(mdxs->threads[t]);    // TODO: check
-        }
 
         Safefree(mdxs->threads);
         Safefree(mdxs->uri_str);

@@ -50,20 +50,10 @@ jobs:
       - name: Download & extract libmongoc
         run: curl -L https://github.com/mongodb/mongo-c-driver/releases/download/1.23.2/mongo-c-driver-1.23.2.tar.gz | tar -xzf -
       - name: Build & install libmongoc
-        run: cd mongo-c-driver-1.23.2 && cmake . && make install && cd ..
+        run: cd mongo-c-driver-1.23.2 && cmake . && make -j4 install && cd ..
       - run: rm -rf mongo-c-driver-1.23.2
       - run: pwd
       - run: ls -laR
-      - name: perl -V
-        run: perl -V
-      - name: Install Dependencies
-        run: cpanm --notest --installdeps --with-configure --with-develop --with-recommends --verbose .
-      - name: perl Makefile.PL
-        run: perl Makefile.PL
-      - name: make
-        run: make
-      - name: Run Tests
-        run: prove -wlvmb t
       - name: perl -V
         run: perl -V
       - name: Install Dependencies
