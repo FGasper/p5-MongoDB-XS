@@ -28,6 +28,7 @@ typedef enum {
 
 typedef enum {
     TASK_TYPE_COMMAND = 1,
+    TASK_TYPE_SHUTDOWN,
 } mdb_task_type_t;
 
 #define TASK_FINISHED(x) (x > TASK_STARTED)
@@ -73,10 +74,26 @@ typedef struct {
 static bool did_init = false;
 
 // ----------------------------------------------------------------------
+
+static void _lock_worker(worker_in_t *worker_input) {
+    if (-1 == pthread_mutex_lock(&worker_input->mutex)) {
+        assert(0); // TODO: Should be in a separate object file.
+    }
+}
+
+static void _unlock_worker(worker_in_t *worker_input) {
+    if (-1 == pthread_mutex_unlock(&worker_input->mutex)) {
+        assert(0); // TODO: Should be in a separate object file.
+    }
+}
+
+// ----------------------------------------------------------------------
 // Task handlers
 // ----------------------------------------------------------------------
 
-static void _handle_command( mongoc_client_t* client, mdb_task_t* task ) {
+static void _handle_command( worker_in_t *input, mdb_task_t* task ) {
+    mongoc_client_t* client = mongoc_client_pool_pop(input->pool);
+
     bool ok = mongoc_client_command_simple(
         client,
         task->db_name,
@@ -87,16 +104,25 @@ static void _handle_command( mongoc_client_t* client, mdb_task_t* task ) {
     );
 
     task->state = ok ? TASK_SUCCEEDED : TASK_FAILED;
+
+    mongoc_client_pool_push(input->pool, client);
+
+    _lock_worker(input);
+    courier_set(input->courier);
+    _unlock_worker(input);
 }
 
-typedef void (*mdxs_handler_t) (mongoc_client_t*, mdb_task_t*);
+typedef void (*mdxs_handler_t) (worker_in_t*, mdb_task_t*);
 
 static mdxs_handler_t mdxs_handlers[] = {
     [TASK_TYPE_COMMAND] = _handle_command,
+    [TASK_TYPE_SHUTDOWN] = NULL,
 };
 
-static void execute_task( mongoc_client_t* client, mdb_task_t* task ) {
-    mdxs_handlers[task->type](client, task);
+static void execute_task( worker_in_t *input, mdb_task_t* task ) {
+    mdxs_handler_t handler = mdxs_handlers[task->type];
+    assert(handler);
+    handler(input, task);
 }
 
 // ----------------------------------------------------------------------
@@ -169,20 +195,6 @@ void _initialize_worker_input( worker_in_t *worker_input, mongoc_client_pool_t* 
     pthread_cond_init(&worker_input->tasks_pending, NULL);  // TODO: check
 
     worker_input->pool = pool;
-}
-
-// https://stackoverflow.com/a/525841
-
-static void _lock_worker(worker_in_t *worker_input) {
-    if (-1 == pthread_mutex_lock(&worker_input->mutex)) {
-        assert(0); // TODO: Should be in a separate object file.
-    }
-}
-
-static void _unlock_worker(worker_in_t *worker_input) {
-    if (-1 == pthread_mutex_unlock(&worker_input->mutex)) {
-        assert(0); // TODO: Should be in a separate object file.
-    }
 }
 
 static void _destroy_tasks(mdb_task_t** tasks, unsigned count) {
@@ -319,31 +331,21 @@ static void* worker (void* data) {
     //fprintf(stderr, "in thread %ld\n", (intptr_t) pthread_self());
     worker_in_t *input = data;
 
-    mongoc_client_t *client;
-
     mdb_task_t* task;
 
-    while ( (task = _start_next_task(input)) ) {
-    //fprintf(stderr, "%p starts task %p (pool=%p)\n", pthread_self(), task, input->pool);
-        client = mongoc_client_pool_pop(input->pool);
+    bool sent_shutdown = false;
 
-        // fprintf(stderr, "Client URI: %s\n", mongoc_uri_get_string( mongoc_client_get_uri(client)));
-        // fprintf(stderr, "req p: %p\n", task->command);
-        // fprintf(stderr, "Request: %s\n",  bson_as_json(task->command, NULL));
+    while (!sent_shutdown) {
+        task = _start_next_task(input);
 
-        execute_task(client, task);
+        switch (task->type) {
+            case TASK_TYPE_SHUTDOWN:
+                sent_shutdown = true;
+                break;
 
-        //if (!ok) _set_error(task, &error);
-        // printf("OK: %d\n", ok);
-        // printf("ERROR: %s\n", task->error.message);
-        // printf("REPLY: %s\n", bson_as_json(&task->reply, NULL));
-
-        mongoc_client_pool_push(input->pool, client);
-        // fprintf(stderr, "%p ends task\n", pthread_self());
-
-        _lock_worker(input);
-        courier_set(input->courier);
-        _unlock_worker(input);
+            default:
+                execute_task(input, task);
+        }
     }
 
     return NULL;
@@ -423,7 +425,17 @@ DESTROY(SV* self_sv)
         }
 
         for (unsigned t=0; t<mdxs->num_threads; t++) {
-            pthread_cancel(mdxs->threads[t]);    // TODO: check
+            mdb_task_t* task = calloc(1, sizeof(mdb_task_t));
+            *task = (mdb_task_t) {
+                .type = TASK_TYPE_SHUTDOWN,
+            };
+
+            _push_task(&mdxs->worker_input, task);
+        }
+
+        for (unsigned t=0; t<mdxs->num_threads; t++) {
+            void *ret;
+            pthread_join(mdxs->threads[t], &ret);
         }
 
         mongoc_client_pool_destroy(mdxs->pool);
