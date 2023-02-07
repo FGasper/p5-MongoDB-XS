@@ -30,7 +30,7 @@ my @tests = (
                 $resp,
                 superhashof( {
                     connectionId => superhashof({}),
-                    hosts => superbagof(),
+                    ok => superhashof({}),
                 } ),
                 'expected response',
             ) or diag explain [$resp, $err];

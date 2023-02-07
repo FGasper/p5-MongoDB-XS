@@ -43,7 +43,7 @@ jobs:
       - run: mongod --logpath mongod.log --dbpath data --fork
       - run: cat mongod.log
       - run: apt install -y lsof && lsof | grep IPv4
-      - run: echo 'use admin' | mongosh mongodb://localhost:27017
+      - run: echo 'use admin' | mongosh mongodb://localhost
       - uses: actions/checkout@main
         with:
             submodules: recursive
@@ -52,7 +52,7 @@ jobs:
       - run: perl Makefile.PL
       - run: make test
         env:
-          MDXS_TEST_MONGODB_URI: 'mongodb://localhost:27017'
+          MDXS_TEST_MONGODB_URI: 'mongodb://localhost'
 
   linux:
     runs-on: ubuntu-latest
