@@ -44,13 +44,11 @@ jobs:
       - run: cat mongod.log
       - run: apt install -y lsof && lsof | grep IPv4
       - run: echo 'use admin' | mongosh mongodb://localhost
-
-      - run: gcc example-pool.c -o example-pool $(pkg-config --cflags --libs libmongoc-1.0)
-      - run: ./example-pool
-
       - uses: actions/checkout@main
         with:
             submodules: recursive
+      - run: gcc example-pool.c -o example-pool $(pkg-config --cflags --libs libmongoc-1.0)
+      - run: ./example-pool
       - name: Install Dependencies
         run: cpanm --notest --installdeps --with-configure --with-develop --with-recommends --verbose .
       - run: perl Makefile.PL
