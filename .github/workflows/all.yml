@@ -52,7 +52,7 @@ jobs:
       - run: perl Makefile.PL
       - run: make test
         env:
-          MDXS_TEST_MONGODB_URI: 'mongodb://localhost'
+          MDXS_TEST_MONGODB_URI: 'mongodb://127.0.0.1'
 
   linux:
     runs-on: ubuntu-latest
