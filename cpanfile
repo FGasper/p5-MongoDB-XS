@@ -18,4 +18,5 @@ on test => sub {
 
 on develop => sub {
     requires 'AnyEvent';
+    requires 'JSON::PP';
 };

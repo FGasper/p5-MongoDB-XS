@@ -22,13 +22,22 @@ jobs:
 
     steps:
       - run: apt update
-      - run: apt install -y git gnupg cmake curl cpanminus pkg-config
+      - run: apt install -y git gnupg cmake curl cpanminus pkg-config libanyevent-perl
       - run: curl -fsSL https://www.mongodb.org/static/pgp/server-6.0.asc | apt-key add -
       - run: echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org.list
       - run: apt update
       - run: apt install -y mongodb-org
         env:
           DEBIAN_FRONTEND: noninteractive
+
+      # TODO: dedupe
+      - name: Download & extract libmongoc
+        run: curl -L https://github.com/mongodb/mongo-c-driver/releases/download/1.23.2/mongo-c-driver-1.23.2.tar.gz | tar -xzf -
+      - name: Build & install libmongoc
+        run: cd mongo-c-driver-1.23.2 && cmake . && make -j4 install && cd ..
+      - run: rm -rf mongo-c-driver-1.23.2
+      # end dedupe
+
       - run: mkdir data
       - run: mongod --logpath mongod.log --dbpath data --fork
       - uses: actions/checkout@main
