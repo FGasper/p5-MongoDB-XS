@@ -37,6 +37,7 @@ jobs:
         run: cd mongo-c-driver-1.23.2 && cmake . && make -j4 install && cd ..
       - run: rm -rf mongo-c-driver-1.23.2
       # end dedupe
+      - run: ldconfig --verbose
 
       - run: mkdir data
       - run: mongod --logpath mongod.log --dbpath data --fork
