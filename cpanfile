@@ -13,6 +13,7 @@ on configure => sub {
 on test => sub {
     requires 'Test::FailWarnings';
     requires 'Test::Fatal';
+    requires 'Test::Deep';
 };
 
 on develop => sub {
