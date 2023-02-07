@@ -21,13 +21,14 @@ jobs:
       image: ubuntu:jammy
 
     steps:
-      - run: dpkg-reconfigure -fnoninteractive debconf
       - run: apt update
       - run: apt install -y git gnupg cmake curl
       - run: curl -fsSL https://www.mongodb.org/static/pgp/server-6.0.asc | apt-key add -
       - run: echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org.list
       - run: apt update
       - run: apt install -y mongodb-org
+        env:
+          DEBIAN_FRONTEND: noninteractive
       - uses: actions/checkout@main
         with:
             submodules: recursive
