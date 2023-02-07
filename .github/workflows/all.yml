@@ -29,12 +29,17 @@ jobs:
       - run: apt install -y mongodb-org
         env:
           DEBIAN_FRONTEND: noninteractive
+      - run: mkdir data
       - run: mongod --logpath mongod.log --dbpath data --fork
       - uses: actions/checkout@main
         with:
             submodules: recursive
       - name: Install Dependencies
         run: cpanm --notest --installdeps --with-configure --with-develop --with-recommends --verbose .
+      - run: perl Makefile.PL
+      - run: make test
+        env:
+          MDXS_TEST_MONGODB_URI: 'mongodb://localhost:27017'
 
   linux:
     runs-on: ubuntu-latest
