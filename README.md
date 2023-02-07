@@ -4,7 +4,7 @@ MongoDB::XS - [MongoDB](https://mongodb.com) in Perl via C/XS.
 
 # SYNOPSIS
 
-    # For demonstration purposes only;
+    # This sample code uses AnyEvent for demonstration only;
     # any event interface will work.
     use AnyEvent;
 

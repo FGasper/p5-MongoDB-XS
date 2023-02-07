@@ -29,9 +29,12 @@ jobs:
       - run: apt install -y mongodb-org
         env:
           DEBIAN_FRONTEND: noninteractive
+      - run: mongod --logpath mongod.log --dbpath data --fork
       - uses: actions/checkout@main
         with:
             submodules: recursive
+      - name: Install Dependencies
+        run: cpanm --notest --installdeps --with-configure --with-develop --with-recommends --verbose .
 
   linux:
     runs-on: ubuntu-latest
@@ -75,7 +78,7 @@ jobs:
       - name: perl -V
         run: perl -V
       - name: Install Dependencies
-        run: cpanm --notest --installdeps --with-configure --with-develop --with-recommends --verbose .
+        run: cpanm --notest --installdeps --with-configure --with-recommends --verbose .
       - name: perl Makefile.PL
         run: perl Makefile.PL
       - name: make

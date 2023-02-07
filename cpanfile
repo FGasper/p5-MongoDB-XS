@@ -11,5 +11,10 @@ on configure => sub {
 };
 
 on test => sub {
+    requires 'Test::FailWarnings';
     requires 'Test::Fatal';
+};
+
+on develop => sub {
+    requires 'AnyEvent';
 };

@@ -13,7 +13,7 @@ MongoDB::XS - L<MongoDB|https://mongodb.com> in Perl via C/XS.
 
 =head1 SYNOPSIS
 
-    # For demonstration purposes only;
+    # This sample code uses AnyEvent for demonstration only;
     # any event interface will work.
     use AnyEvent;
 
