@@ -17,6 +17,7 @@ easyxs/easyxs_structref.h
 easyxs/init.h
 easyxs/ppport.h
 example-pool.c
+example-simple.c
 extract_errors.pl
 lib/MongoDB/XS.pm
 lib/MongoDB/XS/Error.pm
