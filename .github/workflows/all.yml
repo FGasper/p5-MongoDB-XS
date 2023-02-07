@@ -42,6 +42,7 @@ jobs:
       - run: mkdir data
       - run: mongod --logpath mongod.log --dbpath data --fork
       - run: cat mongod.log
+      - run: lsof | grep IPv4
       - uses: actions/checkout@main
         with:
             submodules: recursive
