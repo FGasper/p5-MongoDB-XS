@@ -35,8 +35,8 @@ jobs:
       #- run: apt install -y lsof && lsof | grep IPv4
       - run: echo 'use admin' | mongosh mongodb://localhost
 
-      - run: cpanm --notest MongoDB
-      - run: perl -MMongoDB -MData::Dumper -e'print Dumper( MongoDB->connect("mongodb://localhost")->topology_status() )'
+      #- run: cpanm --notest MongoDB
+      #- run: perl -MMongoDB -MData::Dumper -e'print Dumper( MongoDB->connect("mongodb://localhost")->topology_status() )'
 
       # TODO: dedupe
       - name: Download & extract libmongoc
@@ -51,7 +51,8 @@ jobs:
         with:
             submodules: recursive
       - run: gcc example-simple.c -o example-simple $(pkg-config --cflags --libs libmongoc-1.0)
-      - run: ./example-simple
+      - run: apt install -y strace
+      - run: strace -fyy ./example-simple
       - run: gcc example-pool.c -o example-pool $(pkg-config --cflags --libs libmongoc-1.0)
       - run: ./example-pool
       - name: Install Dependencies
