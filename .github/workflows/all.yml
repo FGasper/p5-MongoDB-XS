@@ -36,7 +36,7 @@ jobs:
       - run: echo 'use admin' | mongosh mongodb://localhost
 
       - run: cpanm --notest MongoDB
-      - run: perl -MMongoDB -MData::Dumper -e'print Dumper( MongoDB()->connect("mongodb://localhost")->topology_status() )'
+      - run: perl -MMongoDB -MData::Dumper -e'print Dumper( MongoDB->connect("mongodb://localhost")->topology_status() )'
 
       # TODO: dedupe
       - name: Download & extract libmongoc
