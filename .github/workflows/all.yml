@@ -52,7 +52,8 @@ jobs:
             submodules: recursive
       - run: gcc example-simple.c -o example-simple $(pkg-config --cflags --libs libmongoc-1.0)
       - run: apt install -y strace
-      - run: perl -MIO::Socket::INET -e'IO::Socket::INET->new("localhost:27017")'
+      - run: strace -fyy perl -MIO::Socket::INET -e'IO::Socket::INET->new("localhost:27017")'
+      - run: strace -fyy perl -MSocket -Mautodie -e'socket my $s, AF_INET, SOCK_STREAM, 0; $s->blocking(0); CORE::connect($s, Socket::pack_sockaddr_in(27017, "\x7f\0\0\1")); vec( my $win, fileno($s), 1 ) = 1; select undef, $win, undef, undef; getsockopt($s, SOL_SOCKET, SO_ERROR)'
       - run: strace -fyy ./example-simple
       - run: gcc example-pool.c -o example-pool $(pkg-config --cflags --libs libmongoc-1.0)
       - run: ./example-pool
