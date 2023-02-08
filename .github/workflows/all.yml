@@ -42,7 +42,7 @@ jobs:
       - name: Download & extract libmongoc
         run: curl -L https://github.com/mongodb/mongo-c-driver/releases/download/1.23.2/mongo-c-driver-1.23.2.tar.gz | tar -xzf -
       - name: Build & install libmongoc
-        run: cd mongo-c-driver-1.23.2 && cmake . && make -j4 install && cd ..
+        run: cd mongo-c-driver-1.23.2 && cmake -DENABLE_TRACING=ON . && make -j4 install && cd ..
       - run: rm -rf mongo-c-driver-1.23.2
       - run: ldconfig --verbose
       # end dedupe
