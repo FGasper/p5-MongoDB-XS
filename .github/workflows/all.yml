@@ -147,7 +147,7 @@ jobs:
       - run: brew update
       - name: Set up Perl & libmongoc
         run: brew install libmongoc cpanminus mongodb-community@6.0
-      - run: mongod --config /opt/homebrew/etc/mongod.conf --fork
+      - run: mongod --config /usr/local/etc/mongod.conf --fork
       - name: perl -V
         run: perl -V
       - name: Install Dependencies
