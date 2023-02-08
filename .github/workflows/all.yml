@@ -19,7 +19,8 @@ jobs:
 
     container:
       image: ubuntu:jammy
-      ports: 27017
+      ports:
+        - 27017
 
     steps:
       - run: apt update
