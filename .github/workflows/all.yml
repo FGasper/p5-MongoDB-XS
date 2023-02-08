@@ -14,57 +14,6 @@ env:
    PERL_CARTON_PATH: $GITHUB_WORKSPACE/local
 
 jobs:
-#  linux-integration:
-#    runs-on: ubuntu-latest
-#
-#    container:
-#      image: ubuntu:jammy
-#      ports:
-#        - 27017
-#
-#    steps:
-#      - run: apt update
-#      - run: apt install -y git gnupg cmake curl cpanminus pkg-config libanyevent-perl libssl-dev libzstd-dev
-#      - run: curl -fsSL https://www.mongodb.org/static/pgp/server-6.0.asc | apt-key add -
-#      - run: echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org.list
-#      - run: apt update
-#      - run: apt install -y mongodb-org
-#        env:
-#          DEBIAN_FRONTEND: noninteractive
-#      - run: mkdir data
-#      - run: mongod --bind_ip_all --noauth --logpath mongod.log --dbpath data --fork
-#      - run: cat mongod.log
-#      #- run: apt install -y lsof && lsof | grep IPv4
-#      - run: apt install -y strace
-#      - run: echo 'db.runCommand({hello:1})' | strace -fyy mongosh mongodb://localhost
-#
-#      # TODO: dedupe
-#      - name: Download & extract libmongoc
-#        run: curl -L https://github.com/mongodb/mongo-c-driver/releases/download/1.23.2/mongo-c-driver-1.23.2.tar.gz | tar -xzf -
-#      - name: Build & install libmongoc
-#        run: cd mongo-c-driver-1.23.2 && cmake -DENABLE_TRACING=ON . && make -j4 install && cd ..
-#      - run: rm -rf mongo-c-driver-1.23.2
-#      - run: ldconfig --verbose
-#      # end dedupe
-#
-#      - uses: actions/checkout@main
-#        with:
-#            submodules: recursive
-#      - run: gcc example-simple.c -o example-simple $(pkg-config --cflags --libs libmongoc-1.0)
-#      - run: cpanm --notest MongoDB
-#      - run: strace -fyy perl -MMongoDB -MData::Dumper -e'print Dumper( MongoDB->connect("mongodb://localhost")->get_database("admin")->run_command([hello => 1]) )'
-#      - run: strace -fyy perl -MIO::Socket::INET -e'IO::Socket::INET->new("localhost:27017")'
-#      - run: strace -fyy perl -MSocket -Mautodie -e'socket my $s, AF_INET, SOCK_STREAM, 0; $s->blocking(0); CORE::connect($s, Socket::pack_sockaddr_in(27017, "\x7f\0\0\1")); vec( my $win, fileno($s), 1 ) = 1; select undef, $win, undef, undef; getsockopt($s, SOL_SOCKET, SO_ERROR)'
-#      - run: strace -fyy ./example-simple
-#      - run: gcc example-pool.c -o example-pool $(pkg-config --cflags --libs libmongoc-1.0)
-#      - run: ./example-pool
-#      - name: Install Dependencies
-#        run: cpanm --notest --installdeps --with-configure --with-develop --with-recommends --verbose .
-#      - run: perl Makefile.PL
-#      - run: make test
-#        env:
-#          MDXS_TEST_MONGODB_URI: 'mongodb://127.0.0.1'
-
   linux:
     runs-on: ubuntu-latest
 
@@ -136,20 +85,21 @@ jobs:
       - name: perl Makefile.PL FAILS
         run: '! perl Makefile.PL'
 
-  mac-dynamic:
+  mac-integration:
     runs-on: macOS-latest
 
     steps:
-      - uses: actions/checkout@main
-        with:
-            submodules: recursive
-      - run: brew tap mongodb/brew
-      - run: brew update
-      - name: Set up Perl & libmongoc
+      - name: Configure Homebrew for MongoDB
+        run: brew tap mongodb/brew && brew update
+      - name: Install from Homebrew (MongoDB, MongoC, et al.)
         run: brew install libmongoc cpanminus mongodb-community@6.0
       - run: mongod --config /usr/local/etc/mongod.conf --fork
       - name: perl -V
         run: perl -V
+      - name: Clone repository
+        uses: actions/checkout@main
+        with:
+            submodules: recursive
       - name: Install Dependencies
         run: cpanm --notest --installdeps --with-develop --with-configure --with-recommends --verbose .
       - name: perl Makefile.PL
