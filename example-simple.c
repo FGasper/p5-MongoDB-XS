@@ -3,7 +3,7 @@
 int
 main (int argc, char *argv[])
 {
-   const char *uri_string = "mongodb://127.0.0.1:27017";
+   const char *uri_string = "mongodb://localhost";
    mongoc_uri_t *uri;
    mongoc_client_t *client;
    mongoc_database_t *database;
