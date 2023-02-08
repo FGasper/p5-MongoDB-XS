@@ -33,7 +33,7 @@ jobs:
       - run: mongod --bind_ip_all --noauth --logpath mongod.log --dbpath data --fork
       - run: cat mongod.log
       #- run: apt install -y lsof && lsof | grep IPv4
-      - run: echo 'use admin' | mongosh mongodb://localhost
+      - run: echo 'db.runCommand({hello:1})' | mongosh mongodb://localhost
 
       # TODO: dedupe
       - name: Download & extract libmongoc
