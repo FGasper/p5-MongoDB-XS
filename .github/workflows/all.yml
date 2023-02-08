@@ -33,7 +33,8 @@ jobs:
       - run: mongod --bind_ip_all --noauth --logpath mongod.log --dbpath data --fork
       - run: cat mongod.log
       #- run: apt install -y lsof && lsof | grep IPv4
-      - run: echo 'db.runCommand({hello:1})' | mongosh mongodb://localhost
+      - run: apt install -y strace
+      - run: echo 'db.runCommand({hello:1})' | strace -fyy mongosh mongodb://localhost
 
       # TODO: dedupe
       - name: Download & extract libmongoc
@@ -48,7 +49,6 @@ jobs:
         with:
             submodules: recursive
       - run: gcc example-simple.c -o example-simple $(pkg-config --cflags --libs libmongoc-1.0)
-      - run: apt install -y strace
       - run: cpanm --notest MongoDB
       - run: strace -fyy perl -MMongoDB -MData::Dumper -e'print Dumper( MongoDB->connect("mongodb://localhost")->get_database("admin")->run_command([hello => 1]) )'
       - run: strace -fyy perl -MIO::Socket::INET -e'IO::Socket::INET->new("localhost:27017")'
