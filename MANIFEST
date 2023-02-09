@@ -23,6 +23,7 @@ lib/MongoDB/XS.pm
 lib/MongoDB/XS/Error.pm
 lib/MongoDB/XS/ErrorCodes.pm
 t/basic.t
+t/incomplete.t
 t/integration.t
 t/version.t
 worker.c

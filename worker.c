@@ -62,7 +62,7 @@ static mdb_task_t* _start_next_task(worker_in_t *worker_input) {
 // ----------------------------------------------------------------------
 
 static void _handle_command( worker_in_t *input, mdb_task_t* task ) {
-    mongoc_client_t* client = mongoc_client_pool_pop(input->pool);
+    mongoc_client_t* client = input->client;
 
     bool ok = mongoc_client_command_simple(
         client,
@@ -72,8 +72,6 @@ static void _handle_command( worker_in_t *input, mdb_task_t* task ) {
         &task->reply,
         &task->error
     );
-
-    mongoc_client_pool_push(input->pool, client);
 
     task->state = ok ? TASK_SUCCEEDED : TASK_FAILED;
 

@@ -24,7 +24,7 @@ typedef struct {
     pid_t                   pid;
     mongoc_uri_t*           uri;
     const char*             uri_str;
-    mongoc_client_pool_t*   pool;
+    mongoc_client_t*   client;
     worker_in_t             worker_input;
     pthread_t*              threads;
     unsigned                num_threads;
@@ -139,8 +139,8 @@ new(const char* classname, SV* uri_sv)
         }
 
         // This, unfortunately, blocks. Ideally it’d move to the worker.
-        mongoc_client_pool_t *pool = mongoc_client_pool_new_with_error(uri, &error);
-        if (!pool) {
+        mongoc_client_t *client = mongoc_client_new_from_uri_with_error(uri, &error);
+        if (!client) {
             mongoc_uri_destroy(uri);
             Safefree(uri_str);
             croak_sv(_error2sv(aTHX_ &error));
@@ -148,8 +148,7 @@ new(const char* classname, SV* uri_sv)
 
         unsigned threads_count = THREADS_PER_MDXS;   // TODO
 
-        mongoc_client_pool_max_size( pool, threads_count );
-        mongoc_client_pool_set_error_api(pool, MONGOC_ERROR_API_VERSION_2);
+        mongoc_client_set_error_api(client, MONGOC_ERROR_API_VERSION_2);
 
         RETVAL = exs_new_structref( mdxs_t, classname );
 
@@ -158,7 +157,7 @@ new(const char* classname, SV* uri_sv)
             .pid = getpid(),
             .uri = uri,
             .uri_str = uri_str,
-            .pool = pool,
+            .client = client,
             .num_threads = threads_count,
         };
 
@@ -166,7 +165,7 @@ new(const char* classname, SV* uri_sv)
 
         initialize_worker_input( &mdxs->worker_input );
 
-        mdxs->worker_input.pool = pool;
+        mdxs->worker_input.client = client;
 
         for (unsigned t=0; t<mdxs->num_threads; t++) {
             pthread_create(&mdxs->threads[t], NULL, worker_body, &mdxs->worker_input);
@@ -195,10 +194,13 @@ DESTROY(SV* self_sv)
 
         for (unsigned t=0; t<mdxs->num_threads; t++) {
             void *ret;
+            if (pthread_cancel(mdxs->threads[t])) {
+                warn("pthread_cancel(): %d\n", errno);
+            }
             pthread_join(mdxs->threads[t], &ret);
         }
 
-        mongoc_client_pool_destroy(mdxs->pool);
+        mongoc_client_destroy(mdxs->client);
         mongoc_uri_destroy(mdxs->uri);
 
         destroy_worker_input( &mdxs->worker_input );

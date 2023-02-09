@@ -35,7 +35,7 @@ typedef struct {
 typedef struct {
     pthread_mutex_t         mutex;
     pthread_cond_t          tasks_pending;
-    mongoc_client_pool_t*   pool;
+    mongoc_client_t*   client;
     mdb_task_t**            tasks;
     unsigned                num_tasks;
 
