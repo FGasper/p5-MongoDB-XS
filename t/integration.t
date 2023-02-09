@@ -7,6 +7,8 @@ use Test::More;
 use Test::FailWarnings;
 use Test::Deep;
 
+alarm 60;
+
 eval 'require AnyEvent' or do {
     plan skip_all => "No AnyEvent: $@";
 };

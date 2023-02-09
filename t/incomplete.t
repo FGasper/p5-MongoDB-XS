@@ -9,6 +9,8 @@ use Test::More;
 
 use MongoDB::XS;
 
+alarm 60;
+
 my $URI = $ENV{'MDXS_TEST_MONGODB_URI'} or do {
     plan skip_all => "No MDXS_TEST_MONGODB_URI in env";
 };

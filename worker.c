@@ -33,11 +33,16 @@ void destroy_worker_input (worker_in_t *worker_input) {
     }
 
     while (1) {
-        pthread_mutex_unlock(&worker_input->mutex);
         int err = pthread_mutex_destroy(&worker_input->mutex);
         if (!err) break;
 
-        if (err == EBUSY) continue;
+        if (err == EBUSY) {
+
+            // Unlock is not idempotent!
+            pthread_mutex_unlock(&worker_input->mutex);
+
+            continue;
+        }
 
         fprintf(stderr, "pthread_mutex_destroy: %s (%d)\n", strerror(err), err);
 

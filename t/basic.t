@@ -8,6 +8,8 @@ use Test::Fatal;
 
 use MongoDB::XS;
 
+alarm 60;
+
 my $obj = MongoDB::XS->new("mongodb://127.0.0.1/?appname=pool-example");
 
 isa_ok($obj, 'MongoDB::XS', 'new() return');
