@@ -190,8 +190,9 @@ DESTROY(SV* self_sv)
 
         for (unsigned t=0; t<THREADS_PER_MDXS; t++) {
             void *ret;
-            if (pthread_cancel(mdxs->threads[t])) {
-                warn("pthread_cancel(): %d\n", errno);
+            int err;
+            if ( (err = pthread_cancel(mdxs->threads[t])) ) {
+                warn("pthread_cancel(): %d (%s)\n", err, strerror(err));
             }
             pthread_join(mdxs->threads[t], &ret);
         }

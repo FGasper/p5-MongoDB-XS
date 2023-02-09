@@ -21,8 +21,28 @@ void initialize_worker_input (worker_in_t *worker_input) {
 void destroy_worker_input (worker_in_t *worker_input) {
     courier_destroy(worker_input->courier);
 
-    assert( !pthread_cond_destroy(&worker_input->tasks_pending) );
-    assert( !pthread_mutex_destroy(&worker_input->mutex) );
+    while (1) {
+        pthread_cond_broadcast(&worker_input->tasks_pending);
+        int err = pthread_cond_destroy(&worker_input->tasks_pending);
+        if (!err) break;
+
+        if (err == EBUSY) continue;
+
+        fprintf(stderr, "pthread_cond_destroy: %s (%d)\n", strerror(err), err);
+        assert(0);
+    }
+
+    while (1) {
+        pthread_mutex_unlock(&worker_input->mutex);
+        int err = pthread_mutex_destroy(&worker_input->mutex);
+        if (!err) break;
+
+        if (err == EBUSY) continue;
+
+        fprintf(stderr, "pthread_mutex_destroy: %s (%d)\n", strerror(err), err);
+
+        assert(0);
+    }
 }
 
 static mdb_task_t* _start_next_task(worker_in_t *worker_input) {
