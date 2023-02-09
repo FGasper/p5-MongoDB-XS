@@ -18,6 +18,9 @@
 // and exactly one mongoc_client_t; applications that want to parallelize
 // can just create multiple MongoDB::XS instances.
 //
+// We leave this in--and the client-pool logic--just in case it’s ever
+// useful to restore.
+//
 #define THREADS_PER_MDXS 1
 
 typedef struct {
@@ -26,8 +29,7 @@ typedef struct {
     const char*             uri_str;
     mongoc_client_t*   client;
     worker_in_t             worker_input;
-    pthread_t*              threads;
-    unsigned                num_threads;
+    pthread_t               threads[THREADS_PER_MDXS];
 } mdxs_t;
 
 typedef struct {
@@ -146,8 +148,6 @@ new(const char* classname, SV* uri_sv)
             croak_sv(_error2sv(aTHX_ &error));
         }
 
-        unsigned threads_count = THREADS_PER_MDXS;   // TODO
-
         mongoc_client_set_error_api(client, MONGOC_ERROR_API_VERSION_2);
 
         RETVAL = exs_new_structref( mdxs_t, classname );
@@ -158,16 +158,13 @@ new(const char* classname, SV* uri_sv)
             .uri = uri,
             .uri_str = uri_str,
             .client = client,
-            .num_threads = threads_count,
         };
-
-        Newx(mdxs->threads, mdxs->num_threads, pthread_t);
 
         initialize_worker_input( &mdxs->worker_input );
 
         mdxs->worker_input.client = client;
 
-        for (unsigned t=0; t<mdxs->num_threads; t++) {
+        for (unsigned t=0; t<THREADS_PER_MDXS; t++) {
             pthread_create(&mdxs->threads[t], NULL, worker_body, &mdxs->worker_input);
         }
 
@@ -183,7 +180,7 @@ DESTROY(SV* self_sv)
             warn("%" SVf ": DESTROY during global destruction; memory leak likely!", self_sv);
         }
 
-        for (unsigned t=0; t<mdxs->num_threads; t++) {
+        for (unsigned t=0; t<THREADS_PER_MDXS; t++) {
             mdb_task_t* task = calloc(1, sizeof(mdb_task_t));
             *task = (mdb_task_t) {
                 .type = TASK_TYPE_SHUTDOWN,
@@ -192,7 +189,7 @@ DESTROY(SV* self_sv)
             push_task(&mdxs->worker_input, task);
         }
 
-        for (unsigned t=0; t<mdxs->num_threads; t++) {
+        for (unsigned t=0; t<THREADS_PER_MDXS; t++) {
             void *ret;
             if (pthread_cancel(mdxs->threads[t])) {
                 warn("pthread_cancel(): %d\n", errno);
@@ -205,7 +202,6 @@ DESTROY(SV* self_sv)
 
         destroy_worker_input( &mdxs->worker_input );
 
-        Safefree(mdxs->threads);
         Safefree(mdxs->uri_str);
 
 void
