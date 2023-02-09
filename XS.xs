@@ -115,7 +115,6 @@ static bson_t* str2bson_or_croak(pTHX_ const char* bson, size_t len) {
 }
 
 static void _destroy_tasks(mdb_task_t** tasks, unsigned count) {
-    // TODO
     for (unsigned t=0; t<count; t++) {
         Safefree(tasks[t]->db_name);
     }
@@ -258,7 +257,7 @@ run_command(SV* self_sv, SV* dbname_sv, SV* bson_sv, SV* cb)
 
         const char* dbname = exs_SvPVbyte_nolen(dbname_sv);
 
-        // TODO: validate the BSON
+        // TODO: validate the BSON?
 
         bson_t* command = str2bson_or_croak(aTHX_ bson, bsonlen);
 

@@ -14,15 +14,15 @@ void worker_unlock (worker_in_t *worker_input) {
 void initialize_worker_input (worker_in_t *worker_input) {
     worker_input->courier = courier_create();
 
-    pthread_mutex_init(&worker_input->mutex, NULL);  // TODO: check
-    pthread_cond_init(&worker_input->tasks_pending, NULL);  // TODO: check
+    assert( !pthread_mutex_init(&worker_input->mutex, NULL) );
+    assert( !pthread_cond_init(&worker_input->tasks_pending, NULL) );
 }
 
 void destroy_worker_input (worker_in_t *worker_input) {
     courier_destroy(worker_input->courier);
 
-    pthread_cond_destroy(&worker_input->tasks_pending); // TODO
-    pthread_mutex_destroy(&worker_input->mutex);  // TODO: check
+    assert( !pthread_cond_destroy(&worker_input->tasks_pending) );
+    assert( !pthread_mutex_destroy(&worker_input->mutex) );
 }
 
 static mdb_task_t* _start_next_task(worker_in_t *worker_input) {
