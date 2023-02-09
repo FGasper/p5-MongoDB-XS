@@ -4,23 +4,23 @@ MongoDB::XS - [MongoDB](https://mongodb.com) in Perl via C/XS.
 
 # SYNOPSIS
 
+    use MongoDB::XS;
+
     # This sample code uses AnyEvent for demonstration only;
     # any event interface will work.
     use AnyEvent;
-
-    use JSON::PP;
 
     my $mdb = MongoDB::XS->new("mongodb://127.0.0.1");
 
     my $cv = AE::cv();
 
+    # When the fd is readable there is at least one result pending.
     my $w = AE::io( $mdb->fd(), 0, sub {
         $mdb->process();
         $cv->send();
     } );
 
-    my $request_json = JSON::PP::encode_json({ hello: 1 });
-    my $request_bson = MongoDB::XS::ejson2bson($request_json);
+    my $request_bson = MongoDB::XS::ejson2bson('{"hello": 1}');
 
     $mdb->run_command(
         'admin',
@@ -36,7 +36,7 @@ MongoDB::XS - [MongoDB](https://mongodb.com) in Perl via C/XS.
         },
     );
 
-    $condvar->recv();
+    $cv->recv();
 
 # DESCRIPTION
 
