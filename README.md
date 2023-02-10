@@ -84,8 +84,6 @@ This module is experimental; its interface is subject to change.
 It’s been stable for the author as an alternative to
 `mongosh`, but YMMV.
 
-It also lacks fine-tuning controls like read & write concern.
-
 # NOTES
 
 This library never calls
@@ -96,20 +94,79 @@ This library never calls
 MongoDB’s [now-discontinued official Perl driver](https://metacpan.org/pod/MongoDB) is the
 obvious point of reference.
 
-# METHODS
+# GENERAL-USE METHODS
 
-# $obj = _CLASS_->new( $URI )
+## $obj = _CLASS_->new( $URI )
 
 Instantiates _CLASS_ with the given $URI.
 
 NB: This may block briefly for DNS lookups.
 
-# _OBJ_->process()
+## $obj = _OBJ_->run\_command( $REQUEST\_BSON, $CALLBACK )
+
+Sends a request (encoded as BSON) to MongoDB.
+(See
+[mongoc\_client\_command\_simple](http://mongoc.org/libmongoc/current/mongoc_client_command_simple.html) for details.)
+
+The $CALLBACK receives either:
+
+- A raw BSON string (to indicate success).
+- A [MongoDB::XS::Error](https://metacpan.org/pod/MongoDB%3A%3AXS%3A%3AError) object.
+
+Exceptions that escape the callback are trapped and reported
+as warnings.
+
+## $level = _OBJ_->get\_read\_concern()
+
+Returns a string that represents _OBJ_’s active read concern,
+or undef if there is none.
+
+The string should match the value of one of the read-concern
+constants mentioned below.
+
+## $obj = _OBJ_->set\_read\_concern( $LEVEL )
+
+Sets the client’s read concern. $LEVEL should be one of the
+read-concern constants mentioned below.
+
+It returns _OBJ_.
+
+## $hr = _OBJ_->get\_write\_concern()
+
+Returns a reference to a hash that represents _OBJ_’s active
+write concern. The hash contents are `w`, `j`, and `wtimeout`;
+see [MongoDB’s documentation](https://www.mongodb.com/docs/manual/reference/write-concern/) for details of what these mean.
+
+(Undef values indicate that no value has been set, so the default
+is active.)
+
+## $obj = _OBJ_->set\_write\_concern( \\%WC )
+
+`get_write_concern()`’s complement. It expects the same hash
+reference. Individual values can be omitted (or left undef) to
+indicate a default value.
+
+For example, the following:
+
+    {
+        w        => 1,
+        j        => undef,
+        wtimeout => 7,
+    }
+
+… indicates the default value for `j` but explicit values
+for `w` and `wtimeout`.
+
+This method returns _OBJ_.
+
+# EVENT LOOP INTEGRATION METHODS
+
+## _OBJ_->process()
 
 Reads any queued request results and calls their associated
 callbacks.
 
-# $fd = _OBJ_->fd()
+## $fd = _OBJ_->fd()
 
 Returns the OS file descriptor that, when readable, indicates
 that at least one result is ready for `process()`ing.
@@ -125,20 +182,6 @@ For these libraries you can do:
 
 (The `dup()` ensures that, when Perl closes $mdb\_fh, it won’t affect
 mongoc.)
-
-# $obj = _OBJ_->run\_command( $REQUEST\_BSON, $CALLBACK )
-
-Sends a request (encoded as BSON) to MongoDB.
-(See
-[mongoc\_client\_command\_simple](http://mongoc.org/libmongoc/current/mongoc_client_command_simple.html) for details.)
-
-The $CALLBACK receives either:
-
-- A raw BSON string (to indicate success).
-- A [MongoDB::XS::Error](https://metacpan.org/pod/MongoDB%3A%3AXS%3A%3AError) object.
-
-Exceptions that escape the callback are trapped and reported
-as warnings.
 
 # STATIC FUNCTIONS
 

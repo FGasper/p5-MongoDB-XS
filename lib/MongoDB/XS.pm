@@ -93,8 +93,6 @@ This module is experimental; its interface is subject to change.
 It’s been stable for the author as an alternative to
 C<mongosh>, but YMMV.
 
-It also lacks fine-tuning controls like read & write concern.
-
 =head1 NOTES
 
 This library never calls
@@ -116,39 +114,15 @@ XSLoader::load( __PACKAGE__, $VERSION );
 
 #----------------------------------------------------------------------
 
-=head1 METHODS
+=head1 GENERAL-USE METHODS
 
-=head1 $obj = I<CLASS>->new( $URI )
+=head2 $obj = I<CLASS>->new( $URI )
 
 Instantiates I<CLASS> with the given $URI.
 
 NB: This may block briefly for DNS lookups.
 
-=head1 I<OBJ>->process()
-
-Reads any queued request results and calls their associated
-callbacks.
-
-=cut
-
-=head1 $fd = I<OBJ>->fd()
-
-Returns the OS file descriptor that, when readable, indicates
-that at least one result is ready for C<process()>ing.
-
-B<NOTE:> Some Perl event libraries only interact with Perl filehandles.
-For these libraries you can do:
-
-    use POSIX ();
-
-    my $fd_dup = POSIX::dup($mdb->fd()) or die "dup: $!";
-
-    open my $mdb_fh, '+>&', $fd_dup or die "open(dup): $!";
-
-(The C<dup()> ensures that, when Perl closes $mdb_fh, it won’t affect
-mongoc.)
-
-=head1 $obj = I<OBJ>->run_command( $REQUEST_BSON, $CALLBACK )
+=head2 $obj = I<OBJ>->run_command( $REQUEST_BSON, $CALLBACK )
 
 Sends a request (encoded as BSON) to MongoDB.
 (See
@@ -166,6 +140,75 @@ The $CALLBACK receives either:
 
 Exceptions that escape the callback are trapped and reported
 as warnings.
+
+=head2 $level = I<OBJ>->get_read_concern()
+
+Returns a string that represents I<OBJ>’s active read concern,
+or undef if there is none.
+
+The string should match the value of one of the read-concern
+constants mentioned below.
+
+=head2 $obj = I<OBJ>->set_read_concern( $LEVEL )
+
+Sets the client’s read concern. $LEVEL should be one of the
+read-concern constants mentioned below.
+
+It returns I<OBJ>.
+
+=head2 $hr = I<OBJ>->get_write_concern()
+
+Returns a reference to a hash that represents I<OBJ>’s active
+write concern. The hash contents are C<w>, C<j>, and C<wtimeout>;
+see L<MongoDB’s documentation|https://www.mongodb.com/docs/manual/reference/write-concern/> for details of what these mean.
+
+(Undef values indicate that no value has been set, so the default
+is active.)
+
+=head2 $obj = I<OBJ>->set_write_concern( \%WC )
+
+C<get_write_concern()>’s complement. It expects the same hash
+reference. Individual values can be omitted (or left undef) to
+indicate a default value.
+
+For example, the following:
+
+    {
+        w        => 1,
+        j        => undef,
+        wtimeout => 7,
+    }
+
+… indicates the default value for C<j> but explicit values
+for C<w> and C<wtimeout>.
+
+This method returns I<OBJ>.
+
+=head1 EVENT LOOP INTEGRATION METHODS
+
+=head2 I<OBJ>->process()
+
+Reads any queued request results and calls their associated
+callbacks.
+
+=cut
+
+=head2 $fd = I<OBJ>->fd()
+
+Returns the OS file descriptor that, when readable, indicates
+that at least one result is ready for C<process()>ing.
+
+B<NOTE:> Some Perl event libraries only interact with Perl filehandles.
+For these libraries you can do:
+
+    use POSIX ();
+
+    my $fd_dup = POSIX::dup($mdb->fd()) or die "dup: $!";
+
+    open my $mdb_fh, '+>&', $fd_dup or die "open(dup): $!";
+
+(The C<dup()> ensures that, when Perl closes $mdb_fh, it won’t affect
+mongoc.)
 
 =head1 STATIC FUNCTIONS
 

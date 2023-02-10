@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #include <mongoc/mongoc.h>
 #include <bson/bson.h>
@@ -11,6 +12,8 @@
 #include "worker.h"
 
 #define PERL_NS "MongoDB::XS"
+
+#define USE_LONG_TIMEOUT (sizeof(IV) >= 8)
 
 // Initially there were multiple threads per MongoDB::XS, but that
 // runs afoul of the need for cursors to be handled by the same
@@ -122,9 +125,140 @@ static void _destroy_tasks(mdb_task_t** tasks, unsigned count) {
 
 // ----------------------------------------------------------------------
 
+static HV* _write_concern_to_hv(pTHX_ const mongoc_write_concern_t *wc) {
+    HV* rethash = newHV();
+
+    const char* wtag = mongoc_write_concern_get_wtag(wc);
+    int32_t w32 = mongoc_write_concern_get_w(wc);
+
+    hv_stores(rethash, "w",
+        (w32 == MONGOC_WRITE_CONCERN_W_DEFAULT) ? &PL_sv_undef
+        : wtag ? newSVpv(wtag, 0)
+        : newSViv(w32)
+    );
+
+    hv_stores(rethash, "j",
+        mongoc_write_concern_journal_is_set(wc)
+            ? boolSV( mongoc_write_concern_get_journal(wc) )
+            : &PL_sv_undef
+    );
+
+    hv_stores( rethash, "wtimeout",
+        newSViv(
+            USE_LONG_TIMEOUT
+                ? mongoc_write_concern_get_wtimeout_int64(wc)
+                : mongoc_write_concern_get_wtimeout(wc)
+        )
+    );
+
+    return rethash;
+}
+
+static bool _sv_can_be_int (pTHX_ SV* specimen) {
+
+    // We already ruled out undef, so if it’s not POK then it’s
+    // some sort of number.
+    if (!SvPOK(specimen)) return true;
+
+    STRLEN len;
+    const char* str = SvPVbyte(specimen, len);
+
+    if (str[0] == '-') str++;
+    return (strspn(str, "0123456789") == len);
+}
+
+// This ignores Perl undef values.
+static mongoc_write_concern_t* _hv_to_write_concern(pTHX_ HV* hv) {
+    int64_t timeout64;
+    int32_t timeout32;
+    bool timeout_set = false;
+
+    bool journal = false;
+    bool journal_set = false;
+    char* wtag = NULL;
+    int32_t w;
+    bool w_set = false;
+
+    SV** timeout_sv = hv_fetchs(hv, "wtimeout", 0);
+    if (timeout_sv && *timeout_sv && SvOK(*timeout_sv)) {
+        if (USE_LONG_TIMEOUT) {
+            timeout64 = exs_SvIV(*timeout_sv);
+        }
+        else {
+            timeout32 = exs_SvIV(*timeout_sv);
+        }
+
+        timeout_set = true;
+    }
+
+    SV** journal_sv = hv_fetchs(hv, "j", 0);
+    if (journal_sv && *journal_sv && SvOK(*journal_sv)) {
+        journal = SvTRUE(*journal_sv);
+        journal_set = true;
+    }
+
+    SV** w_sv = hv_fetchs(hv, "w", 0);
+    if (w_sv && *w_sv && SvOK(*w_sv)) {
+        if (_sv_can_be_int(aTHX_ *w_sv)) {
+            IV iv = SvIV(*w_sv);
+            if (iv > INT32_MAX || iv < INT32_MIN) {
+                croak("Unreasonable “w”: %" IVdf, SvIV(*w_sv));
+            }
+
+            w = (int32_t) iv;
+            w_set = true;
+        }
+        else {
+            wtag = exs_SvPVbyte_nolen(*w_sv);
+        }
+    }
+
+    mongoc_write_concern_t* wc = mongoc_write_concern_new();
+
+    if (journal_set) {
+        mongoc_write_concern_set_journal(wc, journal);
+    }
+
+    if (timeout_set) {
+        if (USE_LONG_TIMEOUT) {
+            mongoc_write_concern_set_wtimeout_int64(wc, timeout64);
+        }
+        else {
+            mongoc_write_concern_set_wtimeout(wc, timeout32);
+        }
+    }
+
+    if (wtag) {
+        mongoc_write_concern_set_wtag(wc, wtag);
+    }
+    else if (w_set) {
+        mongoc_write_concern_set_w(wc, w);
+    }
+
+    return wc;
+}
+
+// ----------------------------------------------------------------------
+
+#define _CREATE_PERL_CONST(constname) \
+    newCONSTSUB( gv_stashpv(PERL_NS, 0), #constname, newSViv(constname) )
+
+// ----------------------------------------------------------------------
+
 MODULE = MongoDB::XS            PACKAGE = MongoDB::XS
 
 PROTOTYPES: DISABLE
+
+BOOT:
+    newCONSTSUB( gv_stashpv(PERL_NS, 0), "READ_CONCERN_LOCAL", newSVpvs(MONGOC_READ_CONCERN_LEVEL_LOCAL));
+    newCONSTSUB( gv_stashpv(PERL_NS, 0), "READ_CONCERN_MAJORITY", newSVpvs(MONGOC_READ_CONCERN_LEVEL_MAJORITY));
+    newCONSTSUB( gv_stashpv(PERL_NS, 0), "READ_CONCERN_LINEARIZABLE", newSVpvs(MONGOC_READ_CONCERN_LEVEL_LINEARIZABLE));
+    newCONSTSUB( gv_stashpv(PERL_NS, 0), "READ_CONCERN_AVAILABLE", newSVpvs(MONGOC_READ_CONCERN_LEVEL_AVAILABLE));
+    newCONSTSUB( gv_stashpv(PERL_NS, 0), "READ_CONCERN_SNAPSHOT", newSVpvs(MONGOC_READ_CONCERN_LEVEL_SNAPSHOT));
+
+    newCONSTSUB( gv_stashpv(PERL_NS, 0), "WRITE_CONCERN_W_DEFAULT", newSViv(MONGOC_WRITE_CONCERN_W_DEFAULT));
+    newCONSTSUB( gv_stashpv(PERL_NS, 0), "WRITE_CONCERN_W_UNACKNOWLEDGED", newSViv(MONGOC_WRITE_CONCERN_W_UNACKNOWLEDGED));
+    newCONSTSUB( gv_stashpv(PERL_NS, 0), "WRITE_CONCERN_W_MAJORITY", newSViv(MONGOC_WRITE_CONCERN_W_MAJORITY));
 
 SV*
 new(const char* classname, SV* uri_sv)
@@ -284,6 +418,83 @@ fd(SV* self_sv)
         RETVAL = courier_read_fd(mdxs->worker_input.courier);
     OUTPUT:
         RETVAL
+
+SV*
+get_read_concern (SV* self_sv)
+    CODE:
+        mdxs_t* mdxs = exs_structref_ptr(self_sv);
+        worker_lock(&mdxs->worker_input);
+        const mongoc_read_concern_t *rc = mongoc_client_get_read_concern(mdxs->client);
+        const char* level = mongoc_read_concern_get_level(rc);
+        RETVAL = level ? newSVpv(level, 0) : &PL_sv_undef;
+        worker_unlock(&mdxs->worker_input);
+    OUTPUT:
+        RETVAL
+
+SV*
+get_write_concern (SV* self_sv)
+    CODE:
+        mdxs_t* mdxs = exs_structref_ptr(self_sv);
+        worker_lock(&mdxs->worker_input);
+        const mongoc_write_concern_t *wc = mongoc_client_get_write_concern(mdxs->client);
+        HV* rethash = _write_concern_to_hv(aTHX_ wc);
+
+        worker_unlock(&mdxs->worker_input);
+
+        RETVAL = newRV_noinc((SV*) rethash);
+    OUTPUT:
+        RETVAL
+
+SV*
+set_read_concern (SV* self_sv, SV* level_sv)
+    CODE:
+        mdxs_t* mdxs = exs_structref_ptr(self_sv);
+
+        const char* level = exs_SvPVbyte_nolen(level_sv);
+
+        mongoc_read_concern_t *rc = mongoc_read_concern_new();
+        if (!mongoc_read_concern_set_level(rc, level)) {
+            mongoc_read_concern_destroy(rc);
+            croak("Failed to initialize read concern struct!");
+        }
+
+        worker_lock(&mdxs->worker_input);
+        mongoc_client_set_read_concern(mdxs->client, rc);
+        worker_unlock(&mdxs->worker_input);
+
+        mongoc_read_concern_destroy(rc);
+
+        RETVAL = SvREFCNT_inc(self_sv);
+    OUTPUT:
+        RETVAL
+
+SV*
+set_write_concern (SV* self_sv, SV* wc_svhv)
+    CODE:
+        mdxs_t* mdxs = exs_structref_ptr(self_sv);
+
+        HV* wc_hv = NULL;
+
+        if (SvROK(wc_svhv)) {
+            wc_hv = (HV*) SvRV(wc_svhv);
+        }
+
+        if (!wc_hv || (SvTYPE((SV*) wc_hv) != SVt_PVHV)) {
+            croak("Write concern must be a hashref, not %" SVf, wc_svhv);
+        }
+
+        mongoc_write_concern_t *wc = _hv_to_write_concern(aTHX_ wc_hv);
+
+        mongoc_client_set_write_concern(mdxs->client, wc);
+
+        mongoc_write_concern_destroy(wc);
+
+        RETVAL = SvREFCNT_inc(self_sv);
+
+    OUTPUT:
+        RETVAL
+
+# ----------------------------------------------------------------------
 
 char*
 mongoc_version_string()

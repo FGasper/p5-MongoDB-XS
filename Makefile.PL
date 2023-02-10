@@ -42,7 +42,7 @@ my $check_c = <<END;
 #include <mongoc/mongoc.h>
 
 int main() {
-    void* foo = mongoc_client_pool_new_with_error;
+    void* foo = mongoc_client_new_from_uri_with_error;
     return 0;
 }
 END
