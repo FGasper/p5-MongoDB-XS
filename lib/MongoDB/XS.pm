@@ -62,9 +62,9 @@ Toward that end, each instance runs “behind” Perl in a separate POSIX
 thread; a pollable file descriptor facilitates event loop integration.
 
 There is no attempt here to replicate the extensive interfaces found
-in official MongoDB drivers. Instead this module provides a minimal
-interface that should nevertheless expose most useful MongoDB client
-functionality.
+in official MongoDB drivers. Instead this module provides a
+minimal interface that should nevertheless expose most useful MongoDB
+client functionality, while also requiring minimal maintenance.
 
 For example, to use a
 L<change stream|https://www.mongodb.com/docs/manual/changeStreams/>,
@@ -85,7 +85,7 @@ Several interfaces here expect and return raw L<BSON|https://bsonspec.org>
 How you create & parse the BSON is up to you.
 CPAN offers L<multiple BSON modules|https://metacpan.org/search?q=bson>;
 alternatively, you can use L<JSON::PP> or some other JSON module
-with this module’s BSON⟷JSON conversion functions (see below).
+with this module’s BSON/JSON conversion functions (see below).
 
 =head1 STATUS
 
@@ -183,6 +183,16 @@ For example, the following:
 for C<w> and C<wtimeout>.
 
 This method returns I<OBJ>.
+
+=head1 CONSTANTS
+
+=over
+
+=item * READ_CONCERN_LOCAL, READ_CONCERN_MAJORITY,
+READ_CONCERN_LINEARIZABLE, READ_CONCERN_AVAILABLE,
+and READ_CONCERN_SNAPSHOT
+
+=back
 
 =head1 EVENT LOOP INTEGRATION METHODS
 
