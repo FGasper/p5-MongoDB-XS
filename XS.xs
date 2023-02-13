@@ -496,7 +496,7 @@ set_read_concern (SV* self_sv, SV* level_sv, SV* cb=NULL)
         push_task(&mdxs->worker_input, &task);
 
 void
-set_write_concern (SV* self_sv, SV* wc_svhv, SV* cb)
+set_write_concern (SV* self_sv, SV* wc_svhv, SV* cb=NULL)
     CODE:
         mdxs_t* mdxs = exs_structref_ptr(self_sv);
 
