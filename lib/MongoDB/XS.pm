@@ -57,14 +57,14 @@ This is a research project, B<NOT> an official MongoDB driver.
 
 =head1 DESIGN
 
-This module avoids blocking Perl.
-Toward that end, each instance runs “behind” Perl in a separate POSIX
+This module attempts to avoid blocking Perl.
+Toward that end, each instance runs “behind” Perl in a separate
 thread; a pollable file descriptor facilitates event loop integration.
 
 There is no attempt here to replicate the extensive interfaces found
-in official MongoDB drivers. Instead this module provides a
+in official MongoDB drivers. Instead, this module provides a
 minimal interface that should nevertheless expose most useful MongoDB
-client functionality, while also requiring minimal maintenance.
+client functionality.
 
 For example, to use a
 L<change stream|https://www.mongodb.com/docs/manual/changeStreams/>,
@@ -116,13 +116,15 @@ XSLoader::load( __PACKAGE__, $VERSION );
 
 =head1 GENERAL-USE METHODS
 
+Most of the below run asynchronously.
+
 =head2 $obj = I<CLASS>->new( $URI )
 
 Instantiates I<CLASS> with the given $URI.
 
 NB: This may block briefly for DNS lookups.
 
-=head2 $obj = I<OBJ>->run_command( $REQUEST_BSON, $CALLBACK )
+=head2 $obj = I<OBJ>->run_command( $REQUEST_BSON, \&CALLBACK )
 
 Sends a request (encoded as BSON) to MongoDB.
 (See
@@ -141,31 +143,32 @@ The $CALLBACK receives either:
 Exceptions that escape the callback are trapped and reported
 as warnings.
 
-=head2 $level = I<OBJ>->get_read_concern()
+=head2 I<OBJ>->get_read_concern( \&CALLBACK )
 
-Returns a string that represents I<OBJ>’s active read concern,
+Calls &CALLBACK with a string that represents I<OBJ>’s active read concern,
 or undef if there is none.
 
 The string should match the value of one of the read-concern
 constants mentioned below.
 
-=head2 $obj = I<OBJ>->set_read_concern( $LEVEL )
+=head2 I<OBJ>->set_read_concern( $LEVEL [, \&CALLBACK ] )
 
 Sets the client’s read concern. $LEVEL should be one of the
 read-concern constants mentioned below.
 
-It returns I<OBJ>.
+&CALLBACK, if given, is called with no parameters whenever the request
+completes.
 
-=head2 $hr = I<OBJ>->get_write_concern()
+=head2 I<OBJ>->get_write_concern( \&CALLBACK )
 
-Returns a reference to a hash that represents I<OBJ>’s active
+Calls &CALLBACK with a reference to a hash that represents I<OBJ>’s active
 write concern. The hash contents are C<w>, C<j>, and C<wtimeout>;
 see L<MongoDB’s documentation|https://www.mongodb.com/docs/manual/reference/write-concern/> for details of what these mean.
 
 (Undef values indicate that no value has been set, so the default
 is active.)
 
-=head2 $obj = I<OBJ>->set_write_concern( \%WC )
+=head2 $obj = I<OBJ>->set_write_concern( \%WC [, \&CALLBACK ] )
 
 C<get_write_concern()>’s complement. It expects the same hash
 reference. Individual values can be omitted (or left undef) to
@@ -182,7 +185,8 @@ For example, the following:
 … indicates the default value for C<j> but explicit values
 for C<w> and C<wtimeout>.
 
-This method returns I<OBJ>.
+&CALLBACK, if given, is called with no parameters whenever the request
+completes.
 
 =head1 CONSTANTS
 

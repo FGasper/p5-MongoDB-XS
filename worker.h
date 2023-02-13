@@ -8,25 +8,37 @@
 #include "courier.h"
 
 typedef enum {
-    TASK_CREATED,
+    TASK_CREATED = 0,
     TASK_STARTED,
     TASK_SUCCEEDED,
     TASK_FAILED,
 } task_state_t;
 
-typedef enum {
-    TASK_TYPE_COMMAND = 1,
-    TASK_TYPE_SHUTDOWN,
-} mdb_task_type_t;
-
 #define TASK_FINISHED(x) (x > TASK_STARTED)
 
+typedef enum {
+    TASK_TYPE_SHUTDOWN = 1,
+    TASK_TYPE_COMMAND,
+    TASK_TYPE_GET_READ_CONCERN,
+    TASK_TYPE_GET_WRITE_CONCERN,
+    TASK_TYPE_SET_READ_CONCERN,
+    TASK_TYPE_SET_WRITE_CONCERN,
+} mdb_task_type_t;
+
 typedef struct {
-    const char*                 db_name;
-    void*                *request_payload;
-    //const mongoc_read_prefs_t*  read_prefs;
-    bson_t                reply;
-    bson_error_t          error;
+    const char*  db_name;
+    void*        *request_payload;
+    bson_t       reply;
+    bson_error_t error;
+} mdb_task_command_t;
+
+typedef struct {
+    union {
+        mdb_task_command_t command;
+        mongoc_read_concern_t *read_concern;
+        mongoc_write_concern_t *write_concern;
+    } per_type;
+
     task_state_t      state;
     mdb_task_type_t  type;
     void*           opaque;
@@ -49,7 +61,7 @@ void destroy_worker_input (worker_in_t*);
 
 mdb_task_t** get_finished_tasks( worker_in_t*, unsigned* );
 
-void push_task( worker_in_t*, mdb_task_t* );
+void push_task( worker_in_t*, const mdb_task_t* );
 
 void* worker_body (void*);
 

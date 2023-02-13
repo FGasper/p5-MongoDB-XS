@@ -86,37 +86,82 @@ static mdb_task_t* _start_next_task(worker_in_t *worker_input) {
 // Task handlers
 // ----------------------------------------------------------------------
 
-static void _handle_command( worker_in_t *input, mdb_task_t* task ) {
+static task_state_t _handle_command( worker_in_t *input, mdb_task_t* task ) {
     mongoc_client_t* client = input->client;
 
-    worker_lock(input);
+    mdb_task_command_t* cmd = &task->per_type.command;
 
     bool ok = mongoc_client_command_simple(
         client,
-        task->db_name,
-        (bson_t*) task->request_payload,
+        cmd->db_name,
+        (bson_t*) cmd->request_payload,
         NULL, //task->read_prefs,
-        &task->reply,
-        &task->error
+        &cmd->reply,
+        &cmd->error
     );
 
-    task->state = ok ? TASK_SUCCEEDED : TASK_FAILED;
-
-    courier_set(input->courier);
-    worker_unlock(input);
+   return ( ok ? TASK_SUCCEEDED : TASK_FAILED );
 }
 
-typedef void (*mdxs_handler_t) (worker_in_t*, mdb_task_t*);
+static task_state_t _handle_get_read_concern( worker_in_t *input, mdb_task_t* task ) {
+    mongoc_client_t* client = input->client;
+
+    task->per_type.read_concern = mongoc_read_concern_copy(
+        mongoc_client_get_read_concern(client)
+    );
+
+    return TASK_SUCCEEDED;
+}
+
+static task_state_t _handle_get_write_concern( worker_in_t *input, mdb_task_t* task ) {
+    mongoc_client_t* client = input->client;
+
+    task->per_type.write_concern = mongoc_write_concern_copy(
+        mongoc_client_get_write_concern(client)
+    );
+
+    return TASK_SUCCEEDED;
+}
+
+static task_state_t _handle_set_read_concern( worker_in_t *input, mdb_task_t* task ) {
+    mongoc_client_t* client = input->client;
+
+    mongoc_client_set_read_concern(client, task->per_type.read_concern);
+
+    mongoc_read_concern_destroy(task->per_type.read_concern);
+
+    return TASK_SUCCEEDED;
+}
+
+static task_state_t _handle_set_write_concern( worker_in_t *input, mdb_task_t* task ) {
+    mongoc_client_t* client = input->client;
+
+    mongoc_client_set_write_concern(client, task->per_type.write_concern);
+
+    mongoc_write_concern_destroy(task->per_type.write_concern);
+
+    return TASK_SUCCEEDED;
+}
+
+typedef task_state_t (*mdxs_handler_t) (worker_in_t*, mdb_task_t*);
 
 static mdxs_handler_t mdxs_handlers[] = {
-    [TASK_TYPE_COMMAND] = _handle_command,
     [TASK_TYPE_SHUTDOWN] = NULL,
+    [TASK_TYPE_COMMAND] = _handle_command,
+    [TASK_TYPE_GET_READ_CONCERN] = _handle_get_read_concern,
+    [TASK_TYPE_GET_WRITE_CONCERN] = _handle_get_write_concern,
+    [TASK_TYPE_SET_READ_CONCERN] = _handle_set_read_concern,
+    [TASK_TYPE_SET_WRITE_CONCERN] = _handle_set_write_concern,
 };
 
 static void _execute_task( worker_in_t *input, mdb_task_t* task ) {
     mdxs_handler_t handler = mdxs_handlers[task->type];
     assert(handler);
-    handler(input, task);
+    task->state = handler(input, task);
+
+    worker_lock(input);
+    courier_set(input->courier);
+    worker_unlock(input);
 }
 
 // ----------------------------------------------------------------------
@@ -177,7 +222,10 @@ mdb_task_t** get_finished_tasks( worker_in_t* worker_input, unsigned *finished_c
     return retval;
 }
 
-void push_task( worker_in_t* worker_input, mdb_task_t* new_task ) {
+void push_task( worker_in_t* worker_input, const mdb_task_t* new_task_orig ) {
+    mdb_task_t* new_task = calloc(1, sizeof(mdb_task_t));
+    memcpy(new_task, new_task_orig, sizeof(mdb_task_t));
+
     worker_lock(worker_input);
 
     mdb_task_t** new_queue = calloc(

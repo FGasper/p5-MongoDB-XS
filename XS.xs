@@ -119,11 +119,22 @@ static bson_t* str2bson_or_croak(pTHX_ const char* bson, size_t len) {
 
 static void _destroy_tasks(mdb_task_t** tasks, unsigned count) {
     for (unsigned t=0; t<count; t++) {
-        Safefree(tasks[t]->db_name);
+        switch (tasks[t]->type) {
+            case TASK_TYPE_COMMAND:
+                Safefree(tasks[t]->per_type.command.db_name);
+                break;
+            default:
+                break;
+        }
     }
 }
 
 // ----------------------------------------------------------------------
+
+SV* _read_concern_to_sv (pTHX_ const mongoc_read_concern_t *rc) {
+    const char* level = mongoc_read_concern_get_level(rc);
+    return level ? newSVpv(level, 0) : &PL_sv_undef;
+}
 
 static HV* _write_concern_to_hv(pTHX_ const mongoc_write_concern_t *wc) {
     HV* rethash = newHV();
@@ -334,6 +345,10 @@ DESTROY(SV* self_sv)
 
         Safefree(mdxs->uri_str);
 
+# ----------------------------------------------------------------------
+# Event loop integration
+# ----------------------------------------------------------------------
+
 void
 process (SV* self_sv)
     CODE:
@@ -345,38 +360,71 @@ process (SV* self_sv)
             SV* reply_sv;
             SV* coderef = tasks[c]->opaque;
 
-            if (tasks[c]->state == TASK_SUCCEEDED) {
-                // printf("REPLY: %s\n", bson_as_json(&tasks[c]->reply, NULL));
+            switch (tasks[c]->type) {
+                case TASK_TYPE_COMMAND: {
+                    mdb_task_command_t* cmd = &tasks[c]->per_type.command;
 
-                reply_sv = bson2sv(aTHX_ &tasks[c]->reply);
+                    if (tasks[c]->state == TASK_SUCCEEDED) {
+                        reply_sv = bson2sv(aTHX_ &cmd->reply);
+                    }
+                    else {
+                        reply_sv = _error2sv(aTHX_ &cmd->error);
+                    }
+
+                    } break;
+
+                case TASK_TYPE_GET_READ_CONCERN: {
+                    mongoc_read_concern_t *rc = tasks[c]->per_type.read_concern;
+                    reply_sv = _read_concern_to_sv(aTHX_ rc);
+                    mongoc_read_concern_destroy(rc);
+                    } break;
+
+                case TASK_TYPE_GET_WRITE_CONCERN: {
+                    mongoc_write_concern_t *wc = tasks[c]->per_type.write_concern;
+                    HV* reply_hv = _write_concern_to_hv(aTHX_ wc);
+                    reply_sv = newRV_noinc((SV*) reply_hv);
+                    mongoc_write_concern_destroy(wc);
+                    } break;
+
+                case TASK_TYPE_SET_READ_CONCERN:
+                case TASK_TYPE_SET_WRITE_CONCERN:
+                    reply_sv = NULL;
+                    break;
+
+                default:
+                    croak("XXXX Unrecognized task: %d\n", tasks[c]->type);
             }
-            else {
-                reply_sv = _error2sv(aTHX_ &tasks[c]->error);
-            }
 
-            SV* args[] = {
-                reply_sv,
-                NULL,
-            };
-            SV* err = NULL;
+            if (coderef) {
+                SV* args[] = {
+                    reply_sv,
+                    NULL,
+                };
+                SV* err = NULL;
 
-            exs_call_sv_void_trapped( coderef, args, &err );
-            SvREFCNT_dec(coderef);
+                exs_call_sv_void_trapped( coderef, args, &err );
+                SvREFCNT_dec(coderef);
 
-            if (err) {
-                warn_sv(err);
-                SvREFCNT_dec(err);
+                if (err) {
+                    warn_sv(err);
+                    SvREFCNT_dec(err);
+                }
             }
         }
 
         _destroy_tasks(tasks, count);
 
-# SV*
-# get_collection(SV* self_sv, const char* dbname, const char* collname)
-#     CODE:
-#         mdxs_t* mdxs = exs_structref_ptr(self_sv);
-#     OUTPUT:
-#         RETVAL
+int
+fd(SV* self_sv)
+    CODE:
+        mdxs_t* mdxs = exs_structref_ptr(self_sv);
+        RETVAL = courier_read_fd(mdxs->worker_input.courier);
+    OUTPUT:
+        RETVAL
+
+# ----------------------------------------------------------------------
+# Tasks
+# ----------------------------------------------------------------------
 
 void
 run_command(SV* self_sv, SV* dbname_sv, SV* bson_sv, SV* cb)
@@ -394,55 +442,36 @@ run_command(SV* self_sv, SV* dbname_sv, SV* bson_sv, SV* cb)
 
         //printf("BSON parsed (%p): %s\n", command, bson_as_json(command, NULL));
 
-        mdb_task_t* task = calloc(1, sizeof(mdb_task_t));
-        *task = (mdb_task_t) {
-            .db_name = savepv(dbname),
-            .request_payload = (void*) command,
-            .state = TASK_CREATED,
-            .reply = BSON_INITIALIZER,
+        const mdb_task_t task = {
             .type = TASK_TYPE_COMMAND,
+            .per_type = {
+                .command = {
+                    .db_name = savepv(dbname),
+                    .request_payload = (void*) command,
+                    .reply = BSON_INITIALIZER,
+                },
+            },
             .opaque = SvREFCNT_inc(cb),
         };
-        //fprintf(stderr, "new task = %p\n", task);
 
-        push_task(&mdxs->worker_input, task);
+        push_task(&mdxs->worker_input, &task);
 
-int
-fd(SV* self_sv)
+void
+get_read_concern (SV* self_sv, SV* cb)
+    ALIAS:
+        get_write_concern = 1
     CODE:
         mdxs_t* mdxs = exs_structref_ptr(self_sv);
-        RETVAL = courier_read_fd(mdxs->worker_input.courier);
-    OUTPUT:
-        RETVAL
 
-SV*
-get_read_concern (SV* self_sv)
-    CODE:
-        mdxs_t* mdxs = exs_structref_ptr(self_sv);
-        worker_lock(&mdxs->worker_input);
-        const mongoc_read_concern_t *rc = mongoc_client_get_read_concern(mdxs->client);
-        const char* level = mongoc_read_concern_get_level(rc);
-        RETVAL = level ? newSVpv(level, 0) : &PL_sv_undef;
-        worker_unlock(&mdxs->worker_input);
-    OUTPUT:
-        RETVAL
+        const mdb_task_t task = {
+            .type = ix ? TASK_TYPE_GET_WRITE_CONCERN : TASK_TYPE_GET_READ_CONCERN,
+            .opaque = SvREFCNT_inc(cb),
+        };
 
-SV*
-get_write_concern (SV* self_sv)
-    CODE:
-        mdxs_t* mdxs = exs_structref_ptr(self_sv);
-        worker_lock(&mdxs->worker_input);
-        const mongoc_write_concern_t *wc = mongoc_client_get_write_concern(mdxs->client);
-        HV* rethash = _write_concern_to_hv(aTHX_ wc);
+        push_task(&mdxs->worker_input, &task);
 
-        worker_unlock(&mdxs->worker_input);
-
-        RETVAL = newRV_noinc((SV*) rethash);
-    OUTPUT:
-        RETVAL
-
-SV*
-set_read_concern (SV* self_sv, SV* level_sv)
+void
+set_read_concern (SV* self_sv, SV* level_sv, SV* cb=NULL)
     CODE:
         mdxs_t* mdxs = exs_structref_ptr(self_sv);
 
@@ -454,18 +483,20 @@ set_read_concern (SV* self_sv, SV* level_sv)
             croak("Failed to initialize read concern struct!");
         }
 
-        worker_lock(&mdxs->worker_input);
-        mongoc_client_set_read_concern(mdxs->client, rc);
-        worker_unlock(&mdxs->worker_input);
+        const mdb_task_t task = {
+            .type = TASK_TYPE_SET_READ_CONCERN,
 
-        mongoc_read_concern_destroy(rc);
+            .per_type = {
+                .read_concern = rc,
+            },
 
-        RETVAL = SvREFCNT_inc(self_sv);
-    OUTPUT:
-        RETVAL
+            .opaque = cb ? SvREFCNT_inc(cb) : NULL,
+        };
 
-SV*
-set_write_concern (SV* self_sv, SV* wc_svhv)
+        push_task(&mdxs->worker_input, &task);
+
+void
+set_write_concern (SV* self_sv, SV* wc_svhv, SV* cb)
     CODE:
         mdxs_t* mdxs = exs_structref_ptr(self_sv);
 
@@ -481,14 +512,17 @@ set_write_concern (SV* self_sv, SV* wc_svhv)
 
         mongoc_write_concern_t *wc = _hv_to_write_concern(aTHX_ wc_hv);
 
-        mongoc_client_set_write_concern(mdxs->client, wc);
+        const mdb_task_t task = {
+            .type = TASK_TYPE_SET_WRITE_CONCERN,
 
-        mongoc_write_concern_destroy(wc);
+            .per_type = {
+                .write_concern = wc,
+            },
 
-        RETVAL = SvREFCNT_inc(self_sv);
+            .opaque = cb ? SvREFCNT_inc(cb) : NULL,
+        };
 
-    OUTPUT:
-        RETVAL
+        push_task(&mdxs->worker_input, &task);
 
 # ----------------------------------------------------------------------
 
